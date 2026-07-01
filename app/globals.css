@@ -1,0 +1,59 @@
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: #f8f9fa;
+  color: #414042;
+  font-family: var(--font-geist-sans);
+}
+
+/* Hoistec Custom Styles */
+.primary {
+  color: #FE5000;
+}
+
+.btn-primary {
+  @apply bg-[#FE5000] hover:bg-[#E04600] text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2;
+}
+
+.card {
+  @apply bg-white rounded-2xl border border-gray-200 shadow-sm p-6;
+}
+
+.status-on-site { @apply bg-green-100 text-green-800; }
+.status-off-site { @apply bg-gray-100 text-gray-800; }
+.status-assembling { @apply bg-blue-100 text-blue-800; }
+.status-disassembling { @apply bg-orange-100 text-orange-800; }
+.status-stopped { @apply bg-yellow-100 text-yellow-800; }
+.status-fault { @apply bg-red-100 text-red-800; }
+
+.sidebar-link {
+  @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all;
+}
+
+.sidebar-link.active {
+  @apply bg-[#FE5000] text-white shadow-sm;
+}
+
+.sidebar-link:hover:not(.active) {
+  @apply bg-gray-100;
+}
