@@ -28,17 +28,15 @@ export default function HoistsPage() {
     customerId: null as number | null,
   });
 
-  // === FILTERED HOISTS ===
+  // Filtered hoists
   const filteredHoists = hoists.filter((hoist) => {
     const searchLower = searchTerm.toLowerCase();
-
     const matchesSearch =
       hoist.serialNumber.toLowerCase().includes(searchLower) ||
       (hoist.individualNumber || '').toLowerCase().includes(searchLower) ||
       hoist.model.toLowerCase().includes(searchLower);
 
     const matchesStatus = statusFilter === 'All' || hoist.status === statusFilter;
-
     return matchesSearch && matchesStatus;
   });
 
@@ -51,7 +49,7 @@ export default function HoistsPage() {
     Fault: 'bg-red-100 text-red-700',
   };
 
-  // === Handlers ===
+  // === Add Hoist Modal ===
   const openAddModal = () => {
     setHoistForm({
       serialNumber: '',
@@ -67,26 +65,6 @@ export default function HoistsPage() {
   };
 
   const closeAddModal = () => setIsAddModalOpen(false);
-
-  const openEditModal = (hoist: Hoist) => {
-    setEditingHoist(hoist);
-    setHoistForm({
-      serialNumber: hoist.serialNumber,
-      individualNumber: hoist.individualNumber || '',
-      model: hoist.model,
-      manufacturer: hoist.manufacturer,
-      status: hoist.status,
-      currentSite: hoist.currentSite,
-      windSpeedLimit: hoist.windSpeedLimit || 15,
-      customerId: hoist.customerId ?? null,
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const closeEditModal = () => {
-    setIsEditModalOpen(false);
-    setEditingHoist(null);
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -105,6 +83,27 @@ export default function HoistsPage() {
     }
     addHoist(hoistForm);
     closeAddModal();
+  };
+
+  // === Edit Hoist Modal ===
+  const openEditModal = (hoist: Hoist) => {
+    setEditingHoist(hoist);
+    setHoistForm({
+      serialNumber: hoist.serialNumber,
+      individualNumber: hoist.individualNumber || '',
+      model: hoist.model,
+      manufacturer: hoist.manufacturer,
+      status: hoist.status,
+      currentSite: hoist.currentSite,
+      windSpeedLimit: hoist.windSpeedLimit || 15,
+      customerId: hoist.customerId ?? null,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingHoist(null);
   };
 
   const handleSubmitEdit = () => {
@@ -198,9 +197,7 @@ export default function HoistsPage() {
                     return (
                       <tr key={hoist.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 font-mono font-semibold text-[#FE5000]">
-                          <Link href={`/hoists/${hoist.id}`} className="hover:underline">
-                            {hoist.serialNumber}
-                          </Link>
+                          <Link href={`/hoists/${hoist.id}`} className="hover:underline">{hoist.serialNumber}</Link>
                         </td>
                         <td className="px-6 py-4 text-gray-600">{hoist.individualNumber || '-'}</td>
                         <td className="px-6 py-4">{hoist.model}</td>
@@ -228,9 +225,7 @@ export default function HoistsPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                      No hoists found.
-                    </td>
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No hoists found.</td>
                   </tr>
                 )}
               </tbody>
@@ -239,8 +234,158 @@ export default function HoistsPage() {
         </div>
       </div>
 
-      {/* Add Modal + Edit Modal (kept short for now) */}
-      {/* You can keep your existing modals here */}
+      {/* ==================== ADD HOIST MODAL ==================== */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold">Add New Hoist</h2>
+              <button onClick={closeAddModal}><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Serial Number *</label>
+                  <input name="serialNumber" value={hoistForm.serialNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Individual Number</label>
+                  <input name="individualNumber" value={hoistForm.individualNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Model *</label>
+                  <input name="model" value={hoistForm.model} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Manufacturer</label>
+                  <input name="manufacturer" value={hoistForm.manufacturer} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Current Site</label>
+                <input name="currentSite" value={hoistForm.currentSite} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Status</label>
+                  <select name="status" value={hoistForm.status} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
+                    <option>On Site</option>
+                    <option>Off Site</option>
+                    <option>Assembling</option>
+                    <option>Disassembling</option>
+                    <option>Stopped</option>
+                    <option>Fault</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Wind Speed Limit (m/s)</label>
+                  <input type="number" name="windSpeedLimit" value={hoistForm.windSpeedLimit} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Assigned Customer</label>
+                <select name="customerId" value={hoistForm.customerId ?? ''} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
+                  <option value="">— Not assigned —</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} ({customer.contactPerson})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={closeAddModal} className="px-6 py-2.5 border border-gray-300 rounded-xl">Cancel</button>
+              <button onClick={handleSubmitAdd} className="btn-primary px-8">Add Hoist</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== EDIT HOIST MODAL ==================== */}
+      {isEditModalOpen && editingHoist && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold">Edit Hoist</h2>
+              <button onClick={closeEditModal}><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Same form fields as Add modal */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Serial Number</label>
+                  <input name="serialNumber" value={hoistForm.serialNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Individual Number</label>
+                  <input name="individualNumber" value={hoistForm.individualNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Model</label>
+                  <input name="model" value={hoistForm.model} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Manufacturer</label>
+                  <input name="manufacturer" value={hoistForm.manufacturer} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Current Site</label>
+                <input name="currentSite" value={hoistForm.currentSite} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Status</label>
+                  <select name="status" value={hoistForm.status} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
+                    <option>On Site</option>
+                    <option>Off Site</option>
+                    <option>Assembling</option>
+                    <option>Disassembling</option>
+                    <option>Stopped</option>
+                    <option>Fault</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Wind Speed Limit (m/s)</label>
+                  <input type="number" name="windSpeedLimit" value={hoistForm.windSpeedLimit} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">Assigned Customer</label>
+                <select name="customerId" value={hoistForm.customerId ?? ''} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
+                  <option value="">— Not assigned —</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} ({customer.contactPerson})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button onClick={closeEditModal} className="px-6 py-2.5 border border-gray-300 rounded-xl">Cancel</button>
+              <button onClick={handleSubmitEdit} className="btn-primary px-8">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
