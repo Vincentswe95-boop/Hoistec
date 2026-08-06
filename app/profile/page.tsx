@@ -1,8 +1,8 @@
-// app/profile/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { useUser } from '@/context/UserContext'
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -17,6 +17,8 @@ export default function ProfilePage() {
   const [password, setPassword] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+
+  const { updateAvatar } = useUser()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,11 +43,14 @@ export default function ProfilePage() {
         setPhone(data.phone || '')
         setRole(data.role || 'customer')
         setAvatarUrl(data.avatar_url || null)
+        if (data.avatar_url) {
+          updateAvatar(data.avatar_url)
+        }
       }
       setLoading(false)
     }
     fetchUserData()
-  }, [supabase])
+  }, [supabase, updateAvatar])
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -86,6 +91,7 @@ export default function ProfilePage() {
       if (dbError) throw dbError
 
       setAvatarUrl(newAvatarUrl)
+      updateAvatar(newAvatarUrl) // This instantly updates the header avatar globally!
       setMessage('Profile picture updated successfully!')
     } catch (err: any) {
       setError(`Error uploading image: ${err.message}`)

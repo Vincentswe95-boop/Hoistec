@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface User {
   name: string;
@@ -12,6 +12,7 @@ interface User {
 interface UserContextType {
   user: User;
   setUser: React.Dispatch<React.SetStateAction<User>>;
+  updateAvatar: (avatarUrl: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -24,8 +25,24 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     avatar: '', 
   });
 
+  // Load saved avatar from localStorage on mount
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem('user_avatar');
+    if (savedAvatar) {
+      setUser(prev => ({ ...prev, avatar: savedAvatar }));
+    }
+  }, []);
+
+  const updateAvatar = (avatarUrl: string) => {
+    setUser(prev => {
+      const updated = { ...prev, avatar: avatarUrl };
+      localStorage.setItem('user_avatar', avatarUrl);
+      return updated;
+    });
+  };
+
   return (
-    <UserContext.Provider value={{ user, setUser }}>
+    <UserContext.Provider value={{ user, setUser, updateAvatar }}>
       {children}
     </UserContext.Provider>
   );
@@ -34,15 +51,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 export function useUser() {
   const context = useContext(UserContext);
   if (!context) {
-    return {
-      user: {
-        name: 'Vincent Bergström',
-        email: 'vincent.bergstrom@renta.se',
-        role: 'ADMIN',
-        avatar: '',
-      },
-      setUser: () => {},
-    };
+    throw new Error('useUser must be used within a UserProvider');
   }
   return context;
 }
