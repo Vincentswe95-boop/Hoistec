@@ -1,114 +1,145 @@
+// context/CustomersContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface Customer {
-  id: number;
+  id: string;
   name: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  address: string;
-  notes?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
 }
 
 interface CustomersContextType {
   customers: Customer[];
   addCustomer: (customer: Omit<Customer, 'id'>) => Promise<void>;
-  updateCustomer: (id: number, updates: Partial<Customer>) => Promise<void>;
-  deleteCustomer: (id: number) => Promise<void>;
-  getCustomerById: (id: number) => Customer | undefined;
+  deleteCustomer: (id: string) => Promise<void>;
+  updateCustomer: (id: string, customer: Partial<Customer>) => Promise<void>;
+  getCustomerById: (id: string | number) => Customer | undefined;
+  loading: boolean;
 }
 
 const CustomersContext = createContext<CustomersContextType | undefined>(undefined);
 
-// Convert database row → our interface
-function mapFromDb(row: any): Customer {
-  return {
-    id: row.id,
-    name: row.name,
-    contactPerson: row.contact_person || '',
-    email: row.email || '',
-    phone: row.phone || '',
-    address: row.address || '',
-    notes: row.notes || undefined,
-  };
-}
-
-// Convert our interface → database format
-function mapToDb(customer: Partial<Customer>) {
-  const db: any = {};
-  if (customer.name !== undefined) db.name = customer.name;
-  if (customer.contactPerson !== undefined) db.contact_person = customer.contactPerson;
-  if (customer.email !== undefined) db.email = customer.email;
-  if (customer.phone !== undefined) db.phone = customer.phone;
-  if (customer.address !== undefined) db.address = customer.address;
-  if (customer.notes !== undefined) db.notes = customer.notes;
-  return db;
-}
-
-export function CustomersProvider({ children }: { children: ReactNode }) {
+export function CustomersProvider({ children }: { children: React.ReactNode }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customers').select('*').order('id');
-    if (error) {
-      console.error('Error fetching customers:', error);
-      return;
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = (data || []).map((c: any) => ({
+        id: c.id.toString(),
+        name: c.name,
+        contactPerson: c.contact_person || c.contactPerson,
+        email: c.email,
+        phone: c.phone,
+        address: c.address,
+      }));
+
+      setCustomers(formatted);
+    } catch (error) {
+      console.error('Error fetching customers from Supabase:', error);
+    } finally {
+      setLoading(false);
     }
-    setCustomers((data || []).map(mapFromDb));
   };
 
   useEffect(() => {
     fetchCustomers();
   }, []);
 
-  const addCustomer = async (newCustomer: Omit<Customer, 'id'>) => {
-    const { data, error } = await supabase
-      .from('customers')
-      .insert([mapToDb(newCustomer)])
-      .select()
-      .single();
+  const getCustomerById = (id: string | number) => {
+    return customers.find(c => String(c.id) === String(id));
+  };
 
-    if (error) {
-      console.error('Error adding customer:', error);
-      alert('Failed to add customer');
-      return;
-    }
-    if (data) {
-      setCustomers(prev => [...prev, mapFromDb(data)]);
+  const addCustomer = async (customerData: Omit<Customer, 'id'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .insert([
+          {
+            name: customerData.name,
+            contact_person: customerData.contactPerson,
+            email: customerData.email,
+            phone: customerData.phone,
+            address: customerData.address,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newCustomer: Customer = {
+          id: data.id.toString(),
+          name: data.name,
+          contactPerson: data.contact_person || data.contactPerson,
+          email: data.email,
+          phone: data.phone,
+          address: data.address,
+        };
+        setCustomers(prev => [newCustomer, ...prev]);
+      }
+    } catch (error: any) {
+      console.error('Error in addCustomer:', error);
+      alert(`Failed to add customer: ${error.message || error}`);
     }
   };
 
-  const updateCustomer = async (id: number, updates: Partial<Customer>) => {
-    const { error } = await supabase
-      .from('customers')
-      .update(mapToDb(updates))
-      .eq('id', id);
+  const deleteCustomer = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Error updating customer:', error);
-      alert('Failed to update customer');
-      return;
+      if (error) throw error;
+
+      setCustomers(prev => prev.filter(c => String(c.id) !== String(id)));
+    } catch (error: any) {
+      console.error('Error in deleteCustomer:', error);
+      alert(`Failed to delete customer: ${error.message || error}`);
     }
-    setCustomers(prev => prev.map(c => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const deleteCustomer = async (id: number) => {
-    const { error } = await supabase.from('customers').delete().eq('id', id);
-    if (error) {
-      console.error('Error deleting customer:', error);
-      alert('Failed to delete customer');
-      return;
-    }
-    setCustomers(prev => prev.filter(c => c.id !== id));
-  };
+  const updateCustomer = async (id: string, customerData: Partial<Customer>) => {
+    try {
+      const updatePayload: any = {};
+      if (customerData.name !== undefined) updatePayload.name = customerData.name;
+      if (customerData.contactPerson !== undefined) updatePayload.contact_person = customerData.contactPerson;
+      if (customerData.email !== undefined) updatePayload.email = customerData.email;
+      if (customerData.phone !== undefined) updatePayload.phone = customerData.phone;
+      if (customerData.address !== undefined) updatePayload.address = customerData.address;
 
-  const getCustomerById = (id: number) => customers.find(c => c.id === id);
+      const { error } = await supabase
+        .from('customers')
+        .update(updatePayload)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setCustomers(prev =>
+        prev.map(c => (String(c.id) === String(id) ? { ...c, ...customerData } : c))
+      );
+    } catch (error: any) {
+      console.error('Error in updateCustomer:', error);
+      alert(`Failed to update customer: ${error.message || error}`);
+    }
+  };
 
   return (
-    <CustomersContext.Provider value={{ customers, addCustomer, updateCustomer, deleteCustomer, getCustomerById }}>
+    <CustomersContext.Provider value={{ customers, addCustomer, deleteCustomer, updateCustomer, getCustomerById, loading }}>
       {children}
     </CustomersContext.Provider>
   );
@@ -116,6 +147,8 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
 export function useCustomers() {
   const context = useContext(CustomersContext);
-  if (!context) throw new Error('useCustomers must be used within CustomersProvider');
+  if (!context) {
+    throw new Error('useCustomers must be used within a CustomersProvider');
+  }
   return context;
 }

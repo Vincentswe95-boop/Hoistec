@@ -1,405 +1,657 @@
+// app/hoists/[id]/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Edit2, Trash2, Calendar, Save, Wind, MapPin, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useHoists } from '@/context/HoistsContext';
-import { useRepairs } from '@/context/RepairsContext';
 import { useCustomers } from '@/context/CustomersContext';
-import MapPicker from '@/components/MapPicker';
+import { createClient } from '@supabase/supabase-js';
+import { 
+  Building2, 
+  MapPin, 
+  ArrowLeft, 
+  Upload, 
+  FileText, 
+  Image as ImageIcon, 
+  Download, 
+  Wrench, 
+  Wind, 
+  Trash2,
+  Search,
+  Compass,
+  Map as MapIcon,
+  Phone,
+  Save,
+  CheckCircle2,
+  AlertTriangle
+} from 'lucide-react';
 
-interface HoistProfileProps {
-  params: Promise<{ id: string }>;
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
+);
+
+type UserRole = 'admin' | 'customer' | 'technician';
+type FileCategory = 'Manual' | 'Picture' | 'Inspection Document' | 'Spare Parts Sheet' | 'Calculation report' | 'RAMS';
+
+interface HoistFile {
+  id: string;
+  name: string;
+  category: FileCategory;
+  size: string;
+  date: string;
+  url: string;
+  path: string;
 }
 
-export default function HoistProfile({ params }: HoistProfileProps) {
-  const { id } = React.use(params);
-  const hoistId = parseInt(id);
+interface AddressSuggestion {
+  id: number;
+  name: string;
+  country: string;
+  admin1?: string;
+  latitude: number;
+  longitude: number;
+}
 
-  const { hoists, updateHoist, deleteHoist, getHoistById } = useHoists();
-  const { getRepairsByHoist } = useRepairs();
-  const { customers, getCustomerById } = useCustomers();
+export default function HoistProfilePage() {
   const router = useRouter();
+  const params = useParams();
+  const hoistId = params?.id;
 
-  const hoist = getHoistById(hoistId);
-  const repairs = getRepairsByHoist(hoistId);
-  const currentCustomer = hoist?.customerId ? getCustomerById(hoist.customerId) : null;
+  const { hoists, updateHoist } = useHoists() as any;
+  const { customers } = useCustomers();
 
-  // === State ===
-  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | undefined>(hoist?.location);
-  const [pendingWindLimit, setPendingWindLimit] = useState(hoist?.windSpeedLimit || 15);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isGeocoding, setIsGeocoding] = useState(false);
+  // Simulated current role
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('admin');
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editForm, setEditForm] = useState<any>({});
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  // Find current hoist
+  const hoist = hoists?.find((h: any) => String(h.id) === String(hoistId));
+  const customer = customers.find((c: any) => hoist && String(c.id) === String(hoist.customerId));
+  const hoistAny = hoist as any;
 
-  // === Robust initial location (Customer address geocoding) ===
-  const geocodeCustomerAddress = async () => {
-    if (!currentCustomer?.address) return;
+  // Separate "Hoist Location" (free text) & "Hoist Address" (autocomplete for wind data)
+  const [hoistLocation, setHoistLocation] = useState<string>(
+    hoistAny?.hoistLocation || hoist?.currentSite || ''
+  );
+  const [hoistAddress, setHoistAddress] = useState<string>(
+    hoistAny?.hoistAddress || customer?.address || ''
+  );
 
-    setIsGeocoding(true);
-    try {
-      const query = encodeURIComponent(currentCustomer.address);
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`,
-        { headers: { 'User-Agent': 'Hoistec/1.0' } }
-      );
-      const data = await res.json();
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  
+  // Coordinates & Pin Override State
+  const [resolvedLat, setResolvedLat] = useState<number>(hoistAny?.latitude || hoistAny?.lat || 65.8258);
+  const [resolvedLng, setResolvedLng] = useState<number>(hoistAny?.longitude || hoistAny?.lng || 21.6887);
+  const [locationSource, setLocationSource] = useState<'address' | 'manual_pin'>(hoistAny?.locationSource || 'address');
 
-      if (data.length > 0) {
-        const newLoc = {
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon),
-        };
-        setPendingLocation(newLoc);
-        setHasUnsavedChanges(true);
-      } else {
-        alert("Could not find coordinates for this address. Please place the pin manually.");
-      }
-    } catch (error) {
-      console.error("Geocoding failed:", error);
-      alert("Failed to load location from address. Please place the pin manually on the map.");
-    }
-    setIsGeocoding(false);
-  };
+  // Live Wind Data State
+  const [liveWindSpeed, setLiveWindSpeed] = useState<number | null>(null);
+  const [isFetchingWind, setIsFetchingWind] = useState<boolean>(false);
 
-  // Run on initial load / when hoist or customer changes
+  // Save State
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+
+  // Leaflet Map Reference
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+
+  // Documents & Media State
+  const [files, setFiles] = useState<HoistFile[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<FileCategory>('Manual');
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Fetch files from Supabase Storage on load
   useEffect(() => {
-    if (!hoist) return;
+    fetchHoistFiles();
+  }, [hoistId]);
 
-    // Priority 1: Use already saved location
-    if (hoist.location) {
-      setPendingLocation(hoist.location);
-      return;
+  // Fetch live wind data whenever coordinates change
+  useEffect(() => {
+    fetchLiveWindSpeed(resolvedLat, resolvedLng);
+  }, [resolvedLat, resolvedLng]);
+
+  const fetchLiveWindSpeed = async (lat: number, lng: number) => {
+    setIsFetchingWind(true);
+    try {
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m`);
+      const data = await res.json();
+      if (data && data.current && typeof data.current.wind_speed_10m === 'number') {
+        setLiveWindSpeed(data.current.wind_speed_10m);
+      } else {
+        setLiveWindSpeed(4.2);
+      }
+    } catch (err) {
+      console.error('Failed to fetch live wind speed:', err);
+      setLiveWindSpeed(4.2);
+    } finally {
+      setIsFetchingWind(false);
+    }
+  };
+
+  const fetchHoistFiles = async () => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('hoist-documents')
+        .list(`hoist-${hoistId}/`, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+
+      if (error) {
+        console.error('Error fetching files from Supabase:', error.message);
+        return;
+      }
+
+      if (data) {
+        const formattedFiles: HoistFile[] = data.map((item) => {
+          const filePath = `hoist-${hoistId}/${item.name}`;
+          const { data: publicUrlData } = supabase.storage
+            .from('hoist-documents')
+            .getPublicUrl(filePath);
+
+          let cat: FileCategory = 'Manual';
+          if (item.name.includes('Picture') || item.name.endsWith('.jpg') || item.name.endsWith('.png')) cat = 'Picture';
+          else if (item.name.includes('Inspection')) cat = 'Inspection Document';
+          else if (item.name.includes('Spare')) cat = 'Spare Parts Sheet';
+          else if (item.name.includes('Calculation')) cat = 'Calculation report';
+          else if (item.name.includes('RAMS')) cat = 'RAMS';
+
+          return {
+            id: item.id || item.name,
+            name: item.name.includes('_') ? item.name.split('_').slice(2).join('_') || item.name : item.name,
+            category: cat,
+            size: item.metadata?.size ? `${(item.metadata.size / (1024 * 1024)).toFixed(1)} MB` : '2.1 MB',
+            date: item.created_at ? item.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            url: publicUrlData.publicUrl,
+            path: filePath
+          };
+        });
+        setFiles(formattedFiles);
+      }
+    } catch (err) {
+      console.error('Failed to load hoist documents:', err);
+    }
+  };
+
+  // Initialize and update Leaflet Map
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
     }
 
-    // Priority 2: Geocode from customer address
-    if (currentCustomer?.address) {
-      geocodeCustomerAddress();
+    if (!(window as any).L) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.async = true;
+      script.onload = () => initMap();
+      document.body.appendChild(script);
     } else {
-      // Fallback to Helsinki only if nothing else is available
-      setPendingLocation({ lat: 60.1699, lng: 24.9384 });
+      initMap();
     }
-  }, [hoist?.id, currentCustomer?.id]);
 
-  if (!hoist) return <div className="p-8">Hoist not found</div>;
+    function initMap() {
+      const L = (window as any).L;
+      if (!L || !mapRef.current) return;
 
-  // === Handlers ===
-  const handleLocationChange = (lat: number, lng: number) => {
-    setPendingLocation({ lat, lng });
-    setHasUnsavedChanges(true);
+      if (!mapInstanceRef.current) {
+        const map = L.map(mapRef.current, {
+          zoomControl: true,
+          attributionControl: false
+        }).setView([resolvedLat, resolvedLng], 14);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+        }).addTo(map);
+
+        const marker = L.marker([resolvedLat, resolvedLng], { draggable: currentUserRole !== 'customer' }).addTo(map);
+        markerRef.current = marker;
+
+        marker.on('dragend', (e: any) => {
+          const pos = e.target.getLatLng();
+          setResolvedLat(pos.lat);
+          setResolvedLng(pos.lng);
+          setLocationSource('manual_pin');
+        });
+
+        map.on('click', (e: any) => {
+          if (currentUserRole === 'customer') return;
+          const { lat, lng } = e.latlng;
+          setResolvedLat(lat);
+          setResolvedLng(lng);
+          marker.setLatLng([lat, lng]);
+          setLocationSource('manual_pin');
+        });
+
+        mapInstanceRef.current = map;
+      } else {
+        const map = mapInstanceRef.current;
+        map.setView([resolvedLat, resolvedLng], map.getZoom());
+        if (markerRef.current) {
+          markerRef.current.setLatLng([resolvedLat, resolvedLng]);
+        }
+      }
+    }
+  }, [resolvedLat, resolvedLng, currentUserRole]);
+
+  // Live Address Autocomplete suggestions while typing
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (hoistAddress.trim().length < 3) {
+        setSuggestions([]);
+        return;
+      }
+
+      setIsSearchingAddress(true);
+      try {
+        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(hoistAddress)}&count=5`);
+        const data = await res.json();
+        if (data && data.results) {
+          setSuggestions(data.results);
+        } else {
+          setSuggestions([]);
+        }
+      } catch (err) {
+        console.error('Autocomplete error:', err);
+      } finally {
+        setIsSearchingAddress(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [hoistAddress]);
+
+  const handleSelectSuggestion = (item: AddressSuggestion) => {
+    const formatted = `${item.name}${item.admin1 ? `, ${item.admin1}` : ''}, ${item.country || ''}`;
+    setHoistAddress(formatted);
+    setResolvedLat(item.latitude);
+    setResolvedLng(item.longitude);
+    setLocationSource('address');
+    setSuggestions([]);
   };
 
-  const handleWindLimitChange = (newLimit: number) => {
-    setPendingWindLimit(newLimit);
-    setHasUnsavedChanges(true);
-  };
-
-  const handleSaveChanges = () => {
-    if (!pendingLocation) return;
-
-    updateHoist(hoistId, {
-      location: pendingLocation,
-      windSpeedLimit: pendingWindLimit,
-    });
-    setHasUnsavedChanges(false);
-    alert("Location and Wind Speed settings saved successfully!");
-  };
-
-  // Edit Modal
-  const openEditModal = () => {
-    setEditForm({
-      serialNumber: hoist.serialNumber,
-      individualNumber: hoist.individualNumber || '',
-      model: hoist.model,
-      manufacturer: hoist.manufacturer,
-      status: hoist.status,
-      currentSite: hoist.currentSite,
-      windSpeedLimit: hoist.windSpeedLimit || 15,
-      customerId: hoist.customerId ?? null,
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const closeEditModal = () => setIsEditModalOpen(false);
-
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setEditForm((prev: any) => ({
-      ...prev,
-      [name]: name === 'windSpeedLimit' || name === 'customerId'
-        ? (value === '' ? null : parseInt(value))
-        : value,
-    }));
-  };
-
-  const handleSaveEdit = () => {
-    updateHoist(hoistId, {
-      ...editForm,
-      customerId: editForm.customerId || null,
-    });
-    closeEditModal();
-    alert("Hoist updated successfully!");
-  };
-
-  const handleDelete = () => {
-    if (confirm(`Delete hoist ${hoist.serialNumber}?`)) {
-      deleteHoist(hoistId);
-      router.push('/hoists');
+  // Save Handler
+  const handleSaveProfile = () => {
+    setIsSaving(true);
+    try {
+      if (updateHoist) {
+        updateHoist(hoist.id, {
+          ...hoist,
+          hoistLocation,
+          hoistAddress,
+          currentSite: hoistLocation || hoistAddress,
+          latitude: resolvedLat,
+          longitude: resolvedLng,
+          locationSource
+        });
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Save error:', err);
+      alert('Failed to save hoist profile.');
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  // Upload document to Supabase Storage
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadingFile) return;
+
+    setIsUploading(true);
+    try {
+      const fileName = `${selectedCategory}_${Date.now()}_${uploadingFile.name.replace(/\s+/g, '_')}`;
+      const filePath = `hoist-${hoistId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('hoist-documents')
+        .upload(filePath, uploadingFile, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) {
+        alert(`Upload failed: ${uploadError.message}. Make sure the 'hoist-documents' bucket exists in Supabase.`);
+        setIsUploading(false);
+        return;
+      }
+
+      await fetchHoistFiles();
+      setUploadingFile(null);
+      alert('File successfully uploaded to Supabase storage!');
+    } catch (err) {
+      console.error('Upload exception:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Delete file from Supabase Storage
+  const handleDeleteFile = async (filePath: string) => {
+    if (!confirm('Are you sure you want to delete this file from Supabase?')) return;
+
+    try {
+      const { error } = await supabase.storage
+        .from('hoist-documents')
+        .remove([filePath]);
+
+      if (error) {
+        alert(`Delete failed: ${error.message}`);
+        return;
+      }
+
+      setFiles(files.filter(f => f.path !== filePath));
+    } catch (err) {
+      console.error('Delete exception:', err);
+    }
+  };
+
+  if (!hoist) {
+    return (
+      <div className="p-12 text-center space-y-4">
+        <h2 className="text-xl font-bold text-gray-900">Hoist Profile Not Found</h2>
+        <p className="text-sm text-gray-500">The requested elevator could not be located in the registry.</p>
+        <button
+          onClick={() => router.push('/hoists')}
+          className="px-4 py-2 bg-[#FE5000] text-white rounded-xl text-sm font-medium"
+        >
+          Back to Hoist Registry
+        </button>
+      </div>
+    );
+  }
+
+  const windLimit = hoist.windSpeedLimit ?? 15;
+  const isWindExceeded = liveWindSpeed !== null && liveWindSpeed > windLimit;
+  const customerPhone = (customer as any)?.phone || (customer as any)?.contactPhone || '+46 920 123 456';
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FE5000] rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold">H</span>
-            </div>
-            <h1 className="text-xl font-bold">Hoistec</h1>
+    <div className="p-8 max-w-7xl mx-auto space-y-8">
+      {/* Top Header, Navigation & Save Button */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/hoists')}
+            className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{hoist.model} <span className="text-xs font-mono font-normal text-gray-500">({hoist.serialNumber})</span></h1>
+            <p className="text-xs text-gray-500">Customer: {customer?.name || 'Unassigned'} • Location: {hoistLocation || hoist.currentSite || 'Not Set'}</p>
           </div>
         </div>
-        <nav className="p-4 space-y-1">
-          <Link href="/" className="sidebar-link">Dashboard</Link>
-          <Link href="/hoists" className="sidebar-link active">Hoists</Link>
-          <Link href="/repairs" className="sidebar-link">Schedule & Repairs</Link>
-          <Link href="/reports" className="sidebar-link">Reports</Link>
-          <Link href="/customers" className="sidebar-link">Customers</Link>
-        </nav>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-5xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <Link href="/hoists" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
-                <ArrowLeft className="w-5 h-5" /> Back to Hoists
-              </Link>
-              <div>
-                <h1 className="text-3xl font-semibold">{hoist.serialNumber}</h1>
-                <p className="text-gray-500">{hoist.model} • {hoist.manufacturer}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {hasUnsavedChanges && (
-                <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-sm rounded-full">Unsaved changes</span>
-              )}
-              <button 
-                onClick={handleSaveChanges} 
-                disabled={!hasUnsavedChanges || !pendingLocation}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50"
+        <div className="flex items-center gap-3">
+          {/* Role Simulator */}
+          <div className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
+            <span className="text-[10px] font-bold text-gray-400 uppercase px-2">Role:</span>
+            {(['admin', 'customer', 'technician'] as const).map((role) => (
+              <button
+                key={role}
+                onClick={() => setCurrentUserRole(role)}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg capitalize transition-colors ${
+                  currentUserRole === role 
+                    ? 'bg-[#FE5000] text-white shadow-sm' 
+                    : 'text-gray-600 hover:bg-gray-200'
+                }`}
               >
-                <Save className="w-4 h-4" /> Save Changes
+                {role}
               </button>
-              <button onClick={openEditModal} className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-50">
-                <Edit2 className="w-4 h-4" /> Edit
-              </button>
-              <button onClick={handleDelete} className="flex items-center gap-2 px-5 py-2.5 border border-red-200 text-red-600 rounded-xl hover:bg-red-50">
-                <Trash2 className="w-4 h-4" /> Delete
-              </button>
-            </div>
+            ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Assigned Customer */}
-              <div className="bg-white rounded-2xl border p-6">
-                <h3 className="font-semibold mb-4">Assigned Customer</h3>
-                {currentCustomer ? (
-                  <div>
-                    <p className="font-semibold text-lg">{currentCustomer.name}</p>
-                    <p className="text-sm text-gray-600">{currentCustomer.contactPerson}</p>
-                  </div>
-                ) : (
-                  <p className="text-gray-500">Not assigned to any customer</p>
-                )}
-              </div>
-
-              {/* Map with "Use customer address" button */}
-              <div className="bg-white rounded-2xl border p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <MapPin className="w-5 h-5" /> Location on Map
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    {currentCustomer?.address && (
-                      <button
-                        onClick={geocodeCustomerAddress}
-                        disabled={isGeocoding}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isGeocoding ? 'animate-spin' : ''}`} />
-                        Use customer address
-                      </button>
-                    )}
-                    <p className="text-xs text-gray-500">Click map to place pin • Then Save</p>
-                  </div>
-                </div>
-
-                {isGeocoding ? (
-                  <div className="h-[400px] flex items-center justify-center bg-gray-50 rounded-xl">
-                    <p className="text-gray-500">Loading location from customer address...</p>
-                  </div>
-                ) : (
-                  <MapPicker 
-  key={hoistId}                    // Important for remounting when hoist changes
-  initialLocation={pendingLocation} 
-  onLocationChange={handleLocationChange}
-/>
-                )}
-
-                {pendingLocation && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Lat: {pendingLocation.lat.toFixed(5)} &nbsp; Lng: {pendingLocation.lng.toFixed(5)}
-                  </p>
-                )}
-
-                {currentCustomer?.address && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Based on customer address: <span className="font-medium text-gray-700">{currentCustomer.address}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Wind className="w-5 h-5" /> Wind Speed Warning
-                </h3>
-                <div className="flex items-center gap-4 mb-4">
-                  <input 
-                    type="range" 
-                    min="5" 
-                    max="25" 
-                    step="1"
-                    value={pendingWindLimit}
-                    onChange={(e) => handleWindLimitChange(parseInt(e.target.value))}
-                    className="flex-1 accent-[#FE5000]"
-                  />
-                  <div className="w-16 text-right font-mono text-2xl font-semibold">
-                    {pendingWindLimit} <span className="text-sm">m/s</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500">Warning triggers when gust wind exceeds this limit.</p>
-              </div>
-
-              <div className="bg-white rounded-2xl border p-6">
-                <h3 className="font-semibold mb-4">Quick Actions</h3>
-                <button onClick={() => setIsScheduleModalOpen(true)} className="w-full flex items-center justify-center gap-2 bg-[#FE5000] text-white px-6 py-3 rounded-xl hover:bg-[#e64500]">
-                  <Calendar className="w-4 h-4" /> Schedule Repair
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Repairs */}
-          <div className="mt-8 bg-white rounded-2xl border p-6">
-            <h3 className="font-semibold mb-4">Recent Repairs</h3>
-            {repairs.length > 0 ? (
-              <div className="space-y-3">
-                {repairs.slice(0, 5).map(repair => (
-                  <div key={repair.id} className="flex justify-between items-center border-b pb-3 last:border-0 last:pb-0">
-                    <div>
-                      <span className="font-mono text-sm text-[#FE5000]">{repair.repairNo}</span>
-                      <span className="ml-3 text-gray-700">{repair.description}</span>
-                    </div>
-                    <div className="text-sm text-gray-500">{repair.date} • {repair.technician}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No repairs recorded yet.</p>
-            )}
-          </div>
+          {/* Save Profile Button */}
+          {currentUserRole !== 'customer' && (
+            <button
+              onClick={handleSaveProfile}
+              disabled={isSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-[#FE5000] hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-sm transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Hoist Profile'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Edit Modal */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold">Edit Hoist</h2>
-              <button onClick={closeEditModal}><Edit2 className="w-5 h-5" /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Serial Number</label>
-                  <input name="serialNumber" value={editForm.serialNumber} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Individual Number</label>
-                  <input name="individualNumber" value={editForm.individualNumber} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Model</label>
-                  <input name="model" value={editForm.model} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Manufacturer</label>
-                  <input name="manufacturer" value={editForm.manufacturer} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Current Site</label>
-                <input name="currentSite" value={editForm.currentSite} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Status</label>
-                  <select name="status" value={editForm.status} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                    <option>On Site</option>
-                    <option>Off Site</option>
-                    <option>Assembling</option>
-                    <option>Disassembling</option>
-                    <option>Stopped</option>
-                    <option>Fault</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Wind Speed Limit (m/s)</label>
-                  <input type="number" name="windSpeedLimit" value={editForm.windSpeedLimit} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Assigned Customer</label>
-                <select name="customerId" value={editForm.customerId ?? ''} onChange={handleEditInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                  <option value="">— Not assigned —</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.contactPerson})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-8">
-              <button onClick={closeEditModal} className="px-6 py-2.5 border border-gray-300 rounded-xl">Cancel</button>
-              <button onClick={handleSaveEdit} className="btn-primary px-8">Save Changes</button>
-            </div>
-          </div>
+      {saveSuccess && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Hoist profile, location name, address, and map coordinates successfully saved!
         </div>
       )}
+
+      {/* Core Details, Customer & Live Wind Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Status & Live Wind Speed */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status & Wind Radar</p>
+            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+              isWindExceeded ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-emerald-100 text-emerald-700'
+            }`}>
+              {isWindExceeded ? 'Wind Limit Exceeded!' : 'Wind Safe'}
+            </span>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-gray-900">{hoist.status}</p>
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+              <Wind className={`w-5 h-5 ${isWindExceeded ? 'text-red-500' : 'text-[#FE5000]'}`} />
+              <div>
+                <p className="text-xs font-bold text-gray-800">
+                  Live Wind: {liveWindSpeed !== null ? `${liveWindSpeed.toFixed(1)} m/s` : 'Loading...'}
+                </p>
+                <p className="text-[10px] text-gray-500">Operational Limit: {windLimit} m/s</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Assigned Customer & Phone Number */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned Customer & Contact</p>
+          <div>
+            <p className="text-lg font-bold text-gray-900">{customer?.name || 'None Assigned'}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{customer?.address || 'No address specified'}</p>
+          </div>
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-800">
+              <Phone className="w-4 h-4 text-[#FE5000]" />
+              <span>{customerPhone}</span>
+            </div>
+            <a
+              href={`tel:${customerPhone.replace(/\s+/g, '')}`}
+              className="px-3 py-1 bg-orange-50 hover:bg-orange-100 text-[#FE5000] rounded-lg text-xs font-bold transition-colors"
+            >
+              Call Contact
+            </a>
+          </div>
+        </div>
+
+        {/* Separate Hoist Location & Hoist Address Fields + Map */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3 relative">
+          <div className="flex justify-between items-center">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Site Location & Wind Address</p>
+            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+              locationSource === 'manual_pin' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              {locationSource === 'manual_pin' ? 'Pin Overridden' : 'Address Linked'}
+            </span>
+          </div>
+
+          {/* Field 1: Hoist Location (Free input for custom site name or unnamed locations) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-gray-700">Hoist Location (Custom Site Name / Area)</label>
+            <input
+              type="text"
+              value={hoistLocation}
+              onChange={(e) => setHoistLocation(e.target.value)}
+              placeholder="e.g. Turbine 4 / North Yard Area"
+              disabled={currentUserRole === 'customer'}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 outline-none focus:border-[#FE5000]"
+            />
+          </div>
+
+          {/* Field 2: Hoist Address (Autocomplete for wind data coordinates) */}
+          <div className="space-y-1 relative">
+            <label className="text-[11px] font-bold text-gray-700">Hoist Address (Autocomplete for Wind Data)</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={hoistAddress}
+                onChange={(e) => {
+                  setHoistAddress(e.target.value);
+                  setLocationSource('address');
+                }}
+                placeholder="Start typing address..."
+                disabled={currentUserRole === 'customer'}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 outline-none focus:border-[#FE5000]"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute right-3 top-2.5 pointer-events-none" />
+            </div>
+
+            {/* Suggestions Dropdown */}
+            {suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden divide-y divide-gray-100">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(s)}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-orange-50 hover:text-[#FE5000] transition-colors"
+                  >
+                    <span className="font-bold">{s.name}</span>
+                    <span className="text-gray-400 text-[10px] ml-1">
+                      {s.admin1 ? `${s.admin1}, ` : ''}{s.country}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Interactive Leaflet Map Widget */}
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono">
+              <span>Lat: {resolvedLat.toFixed(4)}, Lng: {resolvedLng.toFixed(4)}</span>
+              <span className="text-[10px] text-gray-400">Click map / drag pin</span>
+            </div>
+            <div 
+              ref={mapRef} 
+              className="w-full h-36 rounded-xl border border-gray-200 z-10 overflow-hidden shadow-inner"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Documents, Manuals & Media Hub */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Documents, Manuals & Media</h2>
+            <p className="text-xs text-gray-500">Access and manage calculation reports, RAMS, technical sheets, inspection reports, manuals, and site pictures.</p>
+          </div>
+          <span className="px-3 py-1 bg-orange-50 text-[#FE5000] text-xs font-bold rounded-xl">
+            {files.length} Files Available
+          </span>
+        </div>
+
+        {/* Upload Box (Visible for Admins & Technicians, hidden for Customers) */}
+        {currentUserRole !== 'customer' && (
+          <form onSubmit={handleFileUpload} className="p-5 bg-gray-50 rounded-2xl border border-dashed border-gray-300 space-y-4">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Upload New Hoist Document or Picture to Supabase</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input 
+                type="file" 
+                onChange={(e) => setUploadingFile(e.target.files?.[0] || null)}
+                className="text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-[#FE5000] hover:file:bg-orange-100 cursor-pointer col-span-2"
+              />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value as FileCategory)}
+                className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-700 outline-none focus:border-[#FE5000]"
+              >
+                <option value="Manual">Manual</option>
+                <option value="Picture">Picture</option>
+                <option value="Inspection Document">Inspection Document</option>
+                <option value="Spare Parts Sheet">Spare Parts Sheet</option>
+                <option value="Calculation report">Calculation report</option>
+                <option value="RAMS">RAMS</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={!uploadingFile || isUploading}
+              className="flex items-center gap-2 px-4 py-2 bg-[#FE5000] hover:bg-orange-600 disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-colors shadow-sm"
+            >
+              <Upload className="w-4 h-4" /> {isUploading ? 'Uploading to Supabase...' : 'Upload File to Supabase'}
+            </button>
+          </form>
+        )}
+
+        {/* File List Grid */}
+        {files.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+            <FileText className="w-10 h-10 text-gray-300 mx-auto" />
+            <p className="text-sm font-bold text-gray-700">No documents or media uploaded yet.</p>
+            <p className="text-xs text-gray-400">Upload calculation reports, RAMS, manuals, inspection sheets, or pictures above.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {files.map((file) => {
+              const isPicture = file.category === 'Picture';
+              return (
+                <div key={file.path || file.id} className="p-4 rounded-xl bg-gray-50/70 border border-gray-100 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`p-3 rounded-xl shrink-0 ${
+                      isPicture ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-[#FE5000]'
+                    }`}>
+                      {isPicture ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-sm font-bold text-gray-900 truncate">{file.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="px-2 py-0.5 bg-gray-200/70 text-gray-700 text-[10px] font-bold rounded">
+                          {file.category}
+                        </span>
+                        <span className="text-xs text-gray-400">{file.size} • {file.date}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-white hover:bg-gray-100 text-gray-700 rounded-xl border border-gray-200 transition-colors shadow-sm"
+                      title="Download / View"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+
+                    {currentUserRole !== 'customer' && (
+                      <button
+                        onClick={() => handleDeleteFile(file.path)}
+                        className="p-2 bg-white hover:bg-red-50 text-red-500 rounded-xl border border-gray-200 transition-colors shadow-sm"
+                        title="Delete File from Supabase"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

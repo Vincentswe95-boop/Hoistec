@@ -1,391 +1,135 @@
+// app/hoists/page.tsx
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, X, Edit2, Trash2 } from 'lucide-react';
-import { useHoists, Hoist } from '@/context/HoistsContext';
+import { Plus, Search, Truck, MapPin } from 'lucide-react';
+import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
 
 export default function HoistsPage() {
-  const { hoists, addHoist, updateHoist, deleteHoist } = useHoists();
+  const { hoists, deleteHoist } = useHoists();
   const { customers } = useCustomers();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | Hoist['status']>('All');
-
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingHoist, setEditingHoist] = useState<Hoist | null>(null);
-
-  const [hoistForm, setHoistForm] = useState({
-    serialNumber: '',
-    individualNumber: '',
-    model: '',
-    manufacturer: '',
-    status: 'On Site' as Hoist['status'],
-    currentSite: '',
-    windSpeedLimit: 15,
-    customerId: null as number | null,
-  });
-
-  // Filtered hoists
   const filteredHoists = hoists.filter((hoist) => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch =
-      hoist.serialNumber.toLowerCase().includes(searchLower) ||
-      (hoist.individualNumber || '').toLowerCase().includes(searchLower) ||
-      hoist.model.toLowerCase().includes(searchLower);
-
-    const matchesStatus = statusFilter === 'All' || hoist.status === statusFilter;
+    const matchesSearch = 
+      hoist.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (hoist.individualNumber && hoist.individualNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (hoist.model && hoist.model.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesStatus = statusFilter === 'All' || (hoist.status as string) === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const statusColors: any = {
-    'On Site': 'bg-green-100 text-green-700',
-    'Off Site': 'bg-gray-100 text-gray-700',
-    Assembling: 'bg-blue-100 text-blue-700',
-    Disassembling: 'bg-orange-100 text-orange-700',
-    Stopped: 'bg-yellow-100 text-yellow-700',
-    Fault: 'bg-red-100 text-red-700',
-  };
-
-  // === Add Hoist Modal ===
-  const openAddModal = () => {
-    setHoistForm({
-      serialNumber: '',
-      individualNumber: '',
-      model: '',
-      manufacturer: '',
-      status: 'On Site',
-      currentSite: '',
-      windSpeedLimit: 15,
-      customerId: null,
-    });
-    setIsAddModalOpen(true);
-  };
-
-  const closeAddModal = () => setIsAddModalOpen(false);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setHoistForm(prev => ({
-      ...prev,
-      [name]: name === 'windSpeedLimit' || name === 'customerId'
-        ? (value === '' ? null : parseInt(value))
-        : value,
-    }));
-  };
-
-  const handleSubmitAdd = () => {
-    if (!hoistForm.serialNumber || !hoistForm.model) {
-      alert("Please fill in Serial Number and Model");
-      return;
-    }
-    addHoist(hoistForm);
-    closeAddModal();
-  };
-
-  // === Edit Hoist Modal ===
-  const openEditModal = (hoist: Hoist) => {
-    setEditingHoist(hoist);
-    setHoistForm({
-      serialNumber: hoist.serialNumber,
-      individualNumber: hoist.individualNumber || '',
-      model: hoist.model,
-      manufacturer: hoist.manufacturer,
-      status: hoist.status,
-      currentSite: hoist.currentSite,
-      windSpeedLimit: hoist.windSpeedLimit || 15,
-      customerId: hoist.customerId ?? null,
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const closeEditModal = () => {
-    setIsEditModalOpen(false);
-    setEditingHoist(null);
-  };
-
-  const handleSubmitEdit = () => {
-    if (!editingHoist) return;
-    updateHoist(editingHoist.id, hoistForm);
-    closeEditModal();
-  };
-
-  const handleDelete = (id: number, serial: string) => {
-    if (confirm(`Delete hoist ${serial}?`)) {
-      deleteHoist(id);
-    }
-  };
-
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FE5000] rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold">H</span>
-            </div>
-            <h1 className="text-xl font-bold">Hoistec</h1>
-          </div>
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Hoists</h1>
+          <p className="text-sm text-gray-500">{hoists.length} total hoists registered</p>
         </div>
-        <nav className="p-4 space-y-1">
-          <Link href="/" className="sidebar-link">Dashboard</Link>
-          <Link href="/hoists" className="sidebar-link active">Hoists</Link>
-          <Link href="/repairs" className="sidebar-link">Schedule & Repairs</Link>
-          <Link href="/reports" className="sidebar-link">Reports</Link>
-          <Link href="/customers" className="sidebar-link">Customers</Link>
-        </nav>
+        <Link 
+          href="/hoists/new" 
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#FE5000] text-white font-medium text-sm rounded-xl hover:bg-orange-600 transition-colors shadow-sm self-start"
+        >
+          <Plus className="w-4 h-4" /> Add Hoist
+        </Link>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-semibold">Hoists</h1>
-              <p className="text-gray-500 mt-1">{filteredHoists.length} hoists</p>
-            </div>
-            <button onClick={openAddModal} className="btn-primary flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Add Hoist
-            </button>
-          </div>
+      {/* Filters & Search */}
+      <div className="card flex flex-col md:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by serial, individual number or model..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FE5000]/20 focus:border-[#FE5000]"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FE5000]/20 focus:border-[#FE5000] w-full md:w-48"
+        >
+          <option value="All">All Statuses</option>
+          <option value="On Site">On Site</option>
+          <option value="In Warehouse">In Warehouse</option>
+          <option value="In Maintenance">In Maintenance</option>
+        </select>
+      </div>
 
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <input
-              type="text"
-              placeholder="Search by serial, individual number or model..."
-              className="flex-1 border border-gray-300 rounded-xl px-4 py-3"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <select
-              className="border border-gray-300 rounded-xl px-4 py-3"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-            >
-              <option value="All">All Statuses</option>
-              <option value="On Site">On Site</option>
-              <option value="Off Site">Off Site</option>
-              <option value="Assembling">Assembling</option>
-              <option value="Disassembling">Disassembling</option>
-              <option value="Stopped">Stopped</option>
-              <option value="Fault">Fault</option>
-            </select>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white rounded-2xl border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+      {/* Hoists Table */}
+      <div className="card overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/50 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <th className="py-4 px-6">Serial No.</th>
+                <th className="py-4 px-6">Individual No.</th>
+                <th className="py-4 px-6">Model</th>
+                <th className="py-4 px-6">Status</th>
+                <th className="py-4 px-6">Current Site</th>
+                <th className="py-4 px-6">Customer</th>
+                <th className="py-4 px-6 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-sm">
+              {filteredHoists.length > 0 ? (
+                filteredHoists.map((hoist) => {
+                  const customer = customers.find(c => hoist.customerId != null && String(c.id) === String(hoist.customerId));
+                  const statusStr = hoist.status as string;
+                  return (
+                    <tr key={hoist.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-4 px-6 font-mono font-semibold text-[#FE5000]">
+                        <Link href={`/hoists/${hoist.id}`} className="hover:underline">
+                          {hoist.serialNumber}
+                        </Link>
+                      </td>
+                      <td className="py-4 px-6 font-mono text-gray-600">{hoist.individualNumber || '—'}</td>
+                      <td className="py-4 px-6 font-medium text-gray-900">{hoist.model || '—'}</td>
+                      <td className="py-4 px-6">
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full inline-flex items-center gap-1.5 ${
+                          statusStr === 'On Site' ? 'bg-green-100 text-green-700' :
+                          statusStr === 'In Warehouse' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            statusStr === 'On Site' ? 'bg-green-500' :
+                            statusStr === 'In Warehouse' ? 'bg-blue-500' : 'bg-yellow-500'
+                          }`}></span>
+                          {hoist.status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600">{hoist.currentSite || '—'}</td>
+                      <td className="py-4 px-6 text-gray-600">{customer ? customer.name : '—'}</td>
+                      <td className="py-4 px-6 text-right space-x-3">
+                        <Link href={`/hoists/${hoist.id}`} className="text-gray-600 hover:text-[#FE5000] font-medium text-xs">
+                          View
+                        </Link>
+                        <button 
+                          onClick={() => { if(confirm('Are you sure you want to delete this hoist?')) deleteHoist(hoist.id); }}
+                          className="text-red-500 hover:text-red-700 font-medium text-xs"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Serial No.</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Individual No.</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Model</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Current Site</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Customer</th>
-                  <th className="w-24 px-6 py-4 text-right text-sm font-medium text-gray-600">Actions</th>
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                    No hoists found.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y text-sm">
-                {filteredHoists.length > 0 ? (
-                  filteredHoists.map((hoist) => {
-                    const customer = hoist.customerId ? customers.find(c => c.id === hoist.customerId) : null;
-                    return (
-                      <tr key={hoist.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 font-mono font-semibold text-[#FE5000]">
-                          <Link href={`/hoists/${hoist.id}`} className="hover:underline">{hoist.serialNumber}</Link>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{hoist.individualNumber || '-'}</td>
-                        <td className="px-6 py-4">{hoist.model}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[hoist.status]}`}>
-                            {hoist.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{hoist.currentSite}</td>
-                        <td className="px-6 py-4 text-gray-600">
-                          {customer ? customer.name : <span className="text-gray-400">Not assigned</span>}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditModal(hoist)} className="p-2 text-gray-500 hover:text-[#FE5000] hover:bg-orange-50 rounded-lg">
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleDelete(hoist.id, hoist.serialNumber)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No hoists found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* ==================== ADD HOIST MODAL ==================== */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold">Add New Hoist</h2>
-              <button onClick={closeAddModal}><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Serial Number *</label>
-                  <input name="serialNumber" value={hoistForm.serialNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Individual Number</label>
-                  <input name="individualNumber" value={hoistForm.individualNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Model *</label>
-                  <input name="model" value={hoistForm.model} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Manufacturer</label>
-                  <input name="manufacturer" value={hoistForm.manufacturer} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Current Site</label>
-                <input name="currentSite" value={hoistForm.currentSite} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Status</label>
-                  <select name="status" value={hoistForm.status} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                    <option>On Site</option>
-                    <option>Off Site</option>
-                    <option>Assembling</option>
-                    <option>Disassembling</option>
-                    <option>Stopped</option>
-                    <option>Fault</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Wind Speed Limit (m/s)</label>
-                  <input type="number" name="windSpeedLimit" value={hoistForm.windSpeedLimit} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Assigned Customer</label>
-                <select name="customerId" value={hoistForm.customerId ?? ''} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                  <option value="">— Not assigned —</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.contactPerson})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-8">
-              <button onClick={closeAddModal} className="px-6 py-2.5 border border-gray-300 rounded-xl">Cancel</button>
-              <button onClick={handleSubmitAdd} className="btn-primary px-8">Add Hoist</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== EDIT HOIST MODAL ==================== */}
-      {isEditModalOpen && editingHoist && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold">Edit Hoist</h2>
-              <button onClick={closeEditModal}><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Same form fields as Add modal */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Serial Number</label>
-                  <input name="serialNumber" value={hoistForm.serialNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Individual Number</label>
-                  <input name="individualNumber" value={hoistForm.individualNumber} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Model</label>
-                  <input name="model" value={hoistForm.model} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Manufacturer</label>
-                  <input name="manufacturer" value={hoistForm.manufacturer} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Current Site</label>
-                <input name="currentSite" value={hoistForm.currentSite} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Status</label>
-                  <select name="status" value={hoistForm.status} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                    <option>On Site</option>
-                    <option>Off Site</option>
-                    <option>Assembling</option>
-                    <option>Disassembling</option>
-                    <option>Stopped</option>
-                    <option>Fault</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 block mb-1">Wind Speed Limit (m/s)</label>
-                  <input type="number" name="windSpeedLimit" value={hoistForm.windSpeedLimit} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 block mb-1">Assigned Customer</label>
-                <select name="customerId" value={hoistForm.customerId ?? ''} onChange={handleInputChange} className="w-full border rounded-lg px-4 py-2.5">
-                  <option value="">— Not assigned —</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.contactPerson})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-8">
-              <button onClick={closeEditModal} className="px-6 py-2.5 border border-gray-300 rounded-xl">Cancel</button>
-              <button onClick={handleSubmitEdit} className="btn-primary px-8">Save Changes</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
