@@ -1,4 +1,4 @@
-import type { Metadata } from 'import' // keep your existing imports
+import type { Metadata } from 'next'
 import './globals.css'
 import { UserProvider } from '@/context/UserContext'
 import ClientLayout from './ClientLayout'
