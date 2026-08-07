@@ -142,7 +142,11 @@ export default function UserManagementPage() {
                   </td>
                   <td className="p-5">
                     <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold shadow-xs ${
-                      u.role === 'admin' ? 'bg-orange-100 text-[#FE5000]' : 'bg-gray-100 text-gray-700'
+                      u.role === 'admin' 
+                        ? 'bg-orange-100 text-[#FE5000]' 
+                        : u.role === 'customer' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-gray-100 text-gray-700'
                     }`}>
                       <Shield className="w-3 h-3" /> {u.role || 'technician'}
                     </span>
@@ -239,6 +243,7 @@ export default function UserManagementPage() {
                 >
                   <option value="technician">Technician</option>
                   <option value="admin">Admin</option>
+                  <option value="customer">Customer</option>
                 </select>
               </div>
 
