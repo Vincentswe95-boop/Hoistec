@@ -6,13 +6,6 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
 interface MapPickerProps {
   initialLocation?: { lat: number; lng: number };
   onLocationChange: (lat: number, lng: number) => void;
@@ -46,10 +39,23 @@ export default function MapPicker({
   initialLocation, 
   onLocationChange 
 }: MapPickerProps) {
-  const defaultLat = initialLocation?.lat ?? 60.1699;
-  const defaultLng = initialLocation?.lng ?? 24.9384;
+  // Aligned default fallback to Boden, Sweden to match your app's ecosystem
+  const defaultLat = initialLocation?.lat ?? 65.8258;
+  const defaultLng = initialLocation?.lng ?? 21.6887;
 
   const [position, setPosition] = useState<[number, number] | null>([defaultLat, defaultLng]);
+
+  useEffect(() => {
+    // Safely execute Leaflet icon overrides only on the client browser
+    if (typeof window !== 'undefined') {
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (initialLocation && initialLocation.lat && initialLocation.lng) {

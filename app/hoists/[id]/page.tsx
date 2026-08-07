@@ -8,22 +8,17 @@ import { useCustomers } from '@/context/CustomersContext';
 import { createClient } from '@supabase/supabase-js';
 import { 
   Building2, 
-  MapPin, 
   ArrowLeft, 
   Upload, 
   FileText, 
   Image as ImageIcon, 
   Download, 
-  Wrench, 
   Wind, 
   Trash2,
   Search,
-  Compass,
-  Map as MapIcon,
   Phone,
   Save,
-  CheckCircle2,
-  AlertTriangle
+  CheckCircle2
 } from 'lucide-react';
 
 // Initialize Supabase client
@@ -59,7 +54,7 @@ export default function HoistProfilePage() {
   const params = useParams();
   const hoistId = params?.id;
 
-  const { hoists, updateHoist } = useHoists() as any;
+  const { hoists, updateHoist } = useHoists();
   const { customers } = useCustomers();
 
   // Simulated current role
@@ -118,16 +113,20 @@ export default function HoistProfilePage() {
   const fetchLiveWindSpeed = async (lat: number, lng: number) => {
     setIsFetchingWind(true);
     try {
-      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m`);
+      // Safely fetch 10-meter WIND GUSTS without caching
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_gusts_10m&wind_speed_unit=ms`,
+        { cache: 'no-store' }
+      );
       const data = await res.json();
-      if (data && data.current && typeof data.current.wind_speed_10m === 'number') {
-        setLiveWindSpeed(data.current.wind_speed_10m);
+      if (data && data.current && typeof data.current.wind_gusts_10m === 'number') {
+        setLiveWindSpeed(data.current.wind_gusts_10m);
       } else {
-        setLiveWindSpeed(4.2);
+        setLiveWindSpeed(0); 
       }
     } catch (err) {
-      console.error('Failed to fetch live wind speed:', err);
-      setLiveWindSpeed(4.2);
+      console.error('Failed to fetch live wind gusts:', err);
+      setLiveWindSpeed(0);
     } finally {
       setIsFetchingWind(false);
     }
@@ -429,7 +428,7 @@ export default function HoistProfilePage() {
 
       {/* Core Details, Customer & Live Wind Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Status & Live Wind Speed */}
+        {/* Status & Live Wind Gusts */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3">
           <div className="flex justify-between items-center">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status & Wind Radar</p>
@@ -445,7 +444,7 @@ export default function HoistProfilePage() {
               <Wind className={`w-5 h-5 ${isWindExceeded ? 'text-red-500' : 'text-[#FE5000]'}`} />
               <div>
                 <p className="text-xs font-bold text-gray-800">
-                  Live Wind: {liveWindSpeed !== null ? `${liveWindSpeed.toFixed(1)} m/s` : 'Loading...'}
+                  Live Gusts: {isFetchingWind ? 'Fetching...' : liveWindSpeed !== null ? `${liveWindSpeed.toFixed(1)} m/s` : 'Unknown'}
                 </p>
                 <p className="text-[10px] text-gray-500">Operational Limit: {windLimit} m/s</p>
               </div>
