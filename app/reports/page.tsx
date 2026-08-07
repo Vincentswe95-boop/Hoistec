@@ -1,13 +1,23 @@
 // app/reports/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 import { FileText, Download, Calendar } from 'lucide-react';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
 import { useRepairs } from '@/context/RepairsContext';
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
+);
+
 export default function ReportsPage() {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
   const { hoists } = useHoists();
   const { customers } = useCustomers();
   const { getAllRepairs } = useRepairs();
@@ -23,6 +33,38 @@ export default function ReportsPage() {
   const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [hourlyRate, setHourlyRate] = useState(750);
   const [generatedReport, setGeneratedReport] = useState<any>(null);
+
+  // Route protection and authorization check
+  useEffect(() => {
+    const verifyAndLoad = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.email) {
+          router.push('/login');
+          return;
+        }
+
+        // Check user role in database
+        const { data: userRecord, error: userError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('email', session.user.email)
+          .single();
+
+        if (userError || userRecord?.role === 'customer') {
+          router.push('/');
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (err) {
+        console.error('Authorization check failed:', err);
+        router.push('/');
+      }
+    };
+
+    verifyAndLoad();
+  }, [router]);
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +105,11 @@ export default function ReportsPage() {
       totalCost,
     });
   };
+
+  // Prevent flash while verifying authorization
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">

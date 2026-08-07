@@ -24,7 +24,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // ... (keep all your existing useEffects exactly the same)
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
@@ -52,7 +51,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [pathname]);
 
   if (isLoginPage) {
-    // 2. Nest the providers for the login page
     return (
       <UserProvider>
         <CustomersProvider>
@@ -68,7 +66,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  // 3. Nest the providers for the main layout
   return (
     <UserProvider>
       <CustomersProvider>
@@ -97,7 +94,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </div>
                     <div>
                       <h1 className="text-xl font-bold text-gray-900">Hoistec</h1>
-                      <span className="text-xs text-orange-600 font-semibold uppercase tracking-wider">Management</span>
+                      <span className="text-xs text-orange-600 font-semibold uppercase tracking-wider">
+                        {userRole === 'customer' ? 'Customer Portal' : 'Management'}
+                      </span>
                     </div>
                   </div>
                   <button 
@@ -119,12 +118,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <Link href="/repairs" className="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-orange-50 hover:text-[#FE5000] text-gray-700 font-medium text-sm transition-colors">
                     Schedule & Repairs
                   </Link>
-                  <Link href="/reports" className="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-orange-50 hover:text-[#FE5000] text-gray-700 font-medium text-sm transition-colors">
-                    Reports
-                  </Link>
-                  <Link href="/customers" className="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-orange-50 hover:text-[#FE5000] text-gray-700 font-medium text-sm transition-colors">
-                    Customers
-                  </Link>
+
+                  {/* Hide Reports and Customers from Customer role */}
+                  {userRole !== 'customer' && (
+                    <>
+                      <Link href="/reports" className="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-orange-50 hover:text-[#FE5000] text-gray-700 font-medium text-sm transition-colors">
+                        Reports
+                      </Link>
+                      <Link href="/customers" className="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-orange-50 hover:text-[#FE5000] text-gray-700 font-medium text-sm transition-colors">
+                        Customers
+                      </Link>
+                    </>
+                  )}
 
                   {userRole === 'admin' && (
                     <>
@@ -155,9 +160,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </div>
                   
                   <div className="flex items-center gap-2 md:gap-4">
-                    <Link href="/repairs" className="hidden sm:inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-[#FE5000] text-white font-medium text-xs md:text-sm rounded-xl hover:bg-orange-600 transition-colors shadow-sm">
-                      <Plus className="w-4 h-4" /> Schedule Task
-                    </Link>
+                    {userRole !== 'customer' && (
+                      <Link href="/repairs" className="hidden sm:inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-[#FE5000] text-white font-medium text-xs md:text-sm rounded-xl hover:bg-orange-600 transition-colors shadow-sm">
+                        <Plus className="w-4 h-4" /> Schedule Task
+                      </Link>
+                    )}
 
                     <div className="flex items-center gap-2 md:gap-3 pl-2 md:pl-4 border-l border-gray-200">
                       <div className="w-8 h-8 md:w-9 md:h-9 bg-orange-100 text-[#FE5000] font-bold rounded-full flex items-center justify-center text-xs md:text-sm">

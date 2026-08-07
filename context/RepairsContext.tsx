@@ -1,3 +1,4 @@
+// context/RepairsContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -70,12 +71,50 @@ export function RepairsProvider({ children }: { children: ReactNode }) {
   const [repairs, setRepairs] = useState<Repair[]>([]);
 
   const fetchRepairs = async () => {
-    const { data, error } = await supabase.from('repairs').select('*').order('id', { ascending: false });
-    if (error) {
-      console.error('Error fetching repairs:', error);
-      return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let customerIdToFilter: number | null = null;
+      let isCustomer = false;
+
+      if (session?.user?.email) {
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('role, customer_id')
+          .eq('email', session.user.email)
+          .single();
+
+        if (userRecord?.role === 'customer' && userRecord?.customer_id) {
+          isCustomer = true;
+          customerIdToFilter = userRecord.customer_id;
+        }
+      }
+
+      let query = supabase.from('repairs').select('*');
+
+      if (isCustomer && customerIdToFilter !== null) {
+        // Fetch only hoists belonging to this customer
+        const { data: customerHoists } = await supabase
+          .from('hoists')
+          .select('id')
+          .eq('customer_id', customerIdToFilter);
+
+        const hoistIds = customerHoists?.map(h => h.id) || [];
+
+        if (hoistIds.length > 0) {
+          query = query.in('hoist_id', hoistIds);
+        } else {
+          setRepairs([]);
+          return;
+        }
+      }
+
+      const { data, error } = await query.order('id', { ascending: false });
+      if (error) throw error;
+      setRepairs((data || []).map(mapFromDb));
+    } catch (err) {
+      console.error('Error fetching repairs:', err);
     }
-    setRepairs((data || []).map(mapFromDb));
   };
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+// context/HoistsContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -65,12 +66,40 @@ export function HoistsProvider({ children }: { children: ReactNode }) {
   const [hoists, setHoists] = useState<Hoist[]>([]);
 
   const fetchHoists = async () => {
-    const { data, error } = await supabase.from('hoists').select('*').order('id');
-    if (error) {
-      console.error('Error fetching hoists:', error);
-      return;
+    try {
+      // 1. Get current logged in session user
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let customerIdToFilter: number | null = null;
+
+      if (session?.user?.email) {
+        // 2. Fetch user profile from the 'users' table to check role and customer_id
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('role, customer_id')
+          .eq('email', session.user.email)
+          .single();
+
+        // 3. If they are a customer, restrict query strictly to their assigned customer_id
+        if (userRecord?.role === 'customer' && userRecord?.customer_id) {
+          customerIdToFilter = userRecord.customer_id;
+        }
+      }
+
+      // 4. Build query
+      let query = supabase.from('hoists').select('*');
+
+      if (customerIdToFilter !== null) {
+        query = query.eq('customer_id', customerIdToFilter);
+      }
+
+      const { data, error } = await query.order('id');
+      if (error) throw error;
+
+      setHoists((data || []).map(mapFromDb));
+    } catch (err) {
+      console.error('Error fetching hoists:', err);
     }
-    setHoists((data || []).map(mapFromDb));
   };
 
   useEffect(() => {

@@ -2,8 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { Users, UserPlus, Trash2, Shield, Mail, Phone, X } from 'lucide-react';
+import { Users, UserPlus, Trash2, Shield, Mail, Phone, X, Building2 } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
@@ -11,7 +12,10 @@ const supabase = createClient(
 );
 
 export default function UserManagementPage() {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,11 +27,42 @@ export default function UserManagementPage() {
     password: '',
     phone: '',
     role: 'technician',
+    customer_id: '',
   });
 
+  // Route protection and data fetching
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const verifyAndLoad = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.email) {
+          router.push('/login');
+          return;
+        }
+
+        // Check user role
+        const { data: userRecord, error: userError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('email', session.user.email)
+          .single();
+
+        if (userError || userRecord?.role === 'customer') {
+          router.push('/');
+          return;
+        }
+
+        setIsAuthorized(true);
+        fetchUsers();
+        fetchCustomers();
+      } catch (err) {
+        console.error('Authorization check failed:', err);
+        router.push('/');
+      }
+    };
+
+    verifyAndLoad();
+  }, [router]);
 
   async function fetchUsers() {
     try {
@@ -42,6 +77,16 @@ export default function UserManagementPage() {
     }
   }
 
+  async function fetchCustomers() {
+    try {
+      const { data, error } = await supabase.from('customers').select('*');
+      if (error) throw error;
+      if (data) setCustomers(data);
+    } catch (err: any) {
+      console.error('Failed to fetch customers:', err);
+    }
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -49,20 +94,20 @@ export default function UserManagementPage() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase.from('users').insert([
-        {
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          phone: formData.phone,
-          role: formData.role,
-        },
-      ]);
+      const payload: any = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        role: formData.role,
+        customer_id: formData.role === 'customer' && formData.customer_id ? Number(formData.customer_id) : null,
+      };
 
+      const { error } = await supabase.from('users').insert([payload]);
       if (error) throw error;
 
       setIsModalOpen(false);
-      setFormData({ name: '', email: '', password: '', phone: '', role: 'technician' });
+      setFormData({ name: '', email: '', password: '', phone: '', role: 'technician', customer_id: '' });
       fetchUsers();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to add user');
@@ -80,12 +125,23 @@ export default function UserManagementPage() {
     }
   };
 
+  // Helper to find customer company name
+  const getCustomerName = (customerId: number) => {
+    const found = customers.find(c => Number(c.id) === Number(customerId));
+    return found ? found.name : `Customer ID #${customerId}`;
+  };
+
+  // Prevent flash while verifying authorization
+  if (!isAuthorized) {
+    return null;
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 text-xs">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Management</h1>
-          <p className="text-xs text-gray-500 font-medium">Manage system users, permissions, and roles</p>
+          <p className="text-xs text-gray-500 font-medium">Manage system users, permissions, and customer bindings</p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
@@ -113,7 +169,7 @@ export default function UserManagementPage() {
                 <th className="p-5">User</th>
                 <th className="p-5">Email</th>
                 <th className="p-5">Phone</th>
-                <th className="p-5">Role</th>
+                <th className="p-5">Role & Company Link</th>
                 <th className="p-5">Created At</th>
                 <th className="p-5 text-right">Actions</th>
               </tr>
@@ -140,7 +196,7 @@ export default function UserManagementPage() {
                       <Phone className="w-3.5 h-3.5 text-gray-400" /> {u.phone || 'N/A'}
                     </div>
                   </td>
-                  <td className="p-5">
+                  <td className="p-5 space-y-1">
                     <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold shadow-xs ${
                       u.role === 'admin' 
                         ? 'bg-orange-100 text-[#FE5000]' 
@@ -150,6 +206,12 @@ export default function UserManagementPage() {
                     }`}>
                       <Shield className="w-3 h-3" /> {u.role || 'technician'}
                     </span>
+                    {u.role === 'customer' && u.customer_id && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-600 font-bold">
+                        <Building2 className="w-3.5 h-3.5 text-[#FE5000]" />
+                        {getCustomerName(u.customer_id)}
+                      </div>
+                    )}
                   </td>
                   <td className="p-5 text-gray-500">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'}
@@ -246,6 +308,27 @@ export default function UserManagementPage() {
                   <option value="customer">Customer</option>
                 </select>
               </div>
+
+              {formData.role === 'customer' && (
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Assign Customer Company</label>
+                  <select
+                    name="customer_id"
+                    value={formData.customer_id}
+                    onChange={handleInputChange}
+                    required={formData.role === 'customer'}
+                    className="w-full px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl font-medium text-orange-900 outline-none focus:border-[#FE5000]"
+                  >
+                    <option value="">-- Select Customer Company --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.address || 'No address'})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-1">This user will only see hoists assigned to this company.</p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                 <button

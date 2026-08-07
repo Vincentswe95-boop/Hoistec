@@ -1,16 +1,31 @@
-// app/customers/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Building2, Mail, Phone } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Search } from 'lucide-react';
 import { useCustomers } from '@/context/CustomersContext';
 import { useHoists } from '@/context/HoistsContext';
+import { useUser } from '@/context/UserContext'; // Ensure this path matches your project
 
 export default function CustomersPage() {
+  const { user } = useUser();
+  const router = useRouter();
   const { customers, deleteCustomer } = useCustomers();
   const { hoists } = useHoists();
   const [searchQuery, setSearchQuery] = useState('');
+
+  // 1. Guard Logic: Redirect if role is customer
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      router.push('/');
+    }
+  }, [user, router]);
+
+  // 2. Prevent rendering until we know the role
+  if (!user || user.role === 'customer') {
+    return null;
+  }
 
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
