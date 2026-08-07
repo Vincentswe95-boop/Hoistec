@@ -276,8 +276,10 @@ export default function HoistProfilePage() {
     setSuggestions([]);
   };
 
-  // Save Handler
+ // Save Handler
   const handleSaveProfile = () => {
+    if (!hoist) return; // Add this line to satisfy TypeScript!
+
     setIsSaving(true);
     try {
       if (updateHoist) {
