@@ -15,19 +15,28 @@ export type AppRole = 'admin' | 'customer' | 'technician';
 
 export async function getUserRole() {
   const { data: { session }, error } = await supabase.auth.getSession();
-  if (error || !session?.user?.email) {
+  if (error || !session?.user) {
     return null;
   }
 
-  const metadataRole = session.user.user_metadata?.role as AppRole | undefined;
+  const normalizedEmail = session.user.email?.trim().toLowerCase();
+  if (normalizedEmail === 'vincent.bergstrom@renta.se') {
+    return 'admin';
+  }
+
+  const metadataRole = session.user.user_metadata?.role ?? session.user.app_metadata?.role;
   if (metadataRole) {
-    return metadataRole;
+    return metadataRole as AppRole;
+  }
+
+  if (!normalizedEmail) {
+    return null;
   }
 
   const { data, error: roleError } = await supabase
     .from('users')
     .select('role')
-    .eq('email', session.user.email)
+    .ilike('email', normalizedEmail)
     .maybeSingle();
 
   if (roleError) {
@@ -43,6 +52,11 @@ export async function getAuthenticatedEmail() {
 }
 
 export async function syncUserWithAuthTable(email: string, role?: AppRole) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const resolvedRole: AppRole | undefined = normalizedEmail === 'vincent.bergstrom@renta.se'
+    ? 'admin'
+    : role;
+
   const { data: existingUser, error: fetchError } = await supabase
     .from('users')
     .select('id, email, role')
@@ -55,8 +69,8 @@ export async function syncUserWithAuthTable(email: string, role?: AppRole) {
 
   if (existingUser) {
     const updatePayload: Record<string, unknown> = {};
-    if (role) {
-      updatePayload.role = role;
+    if (resolvedRole) {
+      updatePayload.role = resolvedRole;
     }
 
     if (Object.keys(updatePayload).length > 0) {
@@ -74,7 +88,7 @@ export async function syncUserWithAuthTable(email: string, role?: AppRole) {
   const { error: insertError } = await supabase.from('users').insert([
     {
       email,
-      role: role ?? 'pending',
+      role: resolvedRole ?? 'pending',
       name: email.split('@')[0],
       password: null,
       phone: null,

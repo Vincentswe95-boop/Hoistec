@@ -37,17 +37,26 @@ export default function UserManagementPage() {
 
         const role = await getUserRole();
 
-        if (role === 'customer' || role === null) {
+        if (role === 'customer') {
           router.push('/');
           return;
         }
 
+        if (role === 'admin') {
+          setIsAuthorized(true);
+          fetchUsers();
+          fetchCustomers();
+          return;
+        }
+
+        setErrorMsg('Your role is not assigned yet. Please contact an administrator to grant access to User Management.');
         setIsAuthorized(true);
         fetchUsers();
         fetchCustomers();
       } catch (err) {
         console.error('Authorization check failed:', err);
-        router.push('/');
+        setErrorMsg('Unable to verify your access. Please try again in a moment.');
+        setIsAuthorized(true);
       }
     };
 
