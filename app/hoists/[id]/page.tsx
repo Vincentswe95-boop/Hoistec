@@ -276,7 +276,7 @@ export default function HoistProfilePage() {
     setSuggestions([]);
   };
 
-// Save Handler
+  // Save Handler
   const handleSaveProfile = () => {
     if (!hoist) return; 
 
@@ -291,7 +291,7 @@ export default function HoistProfilePage() {
           latitude: resolvedLat,
           longitude: resolvedLng,
           locationSource
-        } as any); // <-- Added 'as any' here so TypeScript stops complaining!
+        } as any);
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
