@@ -1,7 +1,7 @@
 // context/CustomersContext.tsx
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface Customer {
