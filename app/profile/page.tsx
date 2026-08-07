@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useUser } from '@/context/UserContext'
+import { supabase } from '@/lib/supabase'
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -20,18 +20,17 @@ export default function ProfilePage() {
 
   const { updateAvatar } = useUser()
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     async function fetchUserData() {
-      const match = document.cookie.match(new RegExp('(^| )hoistec_session=([^;]+)'))
-      if (!match) return
-      const userEmail = decodeURIComponent(match[2])
+      const { data: { session } } = await supabase.auth.getSession()
+      const userEmail = session?.user?.email
 
-      const { data, error } = await supabase
+      if (!userEmail) {
+        setLoading(false)
+        return
+      }
+
+      const { data } = await supabase
         .from('users')
         .select('*')
         .eq('email', userEmail)

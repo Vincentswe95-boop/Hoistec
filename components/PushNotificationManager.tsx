@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 
 const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
 
@@ -19,11 +19,6 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export default function PushNotificationManager() {
   const [subscribed, setSubscribed] = useState(false)
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     async function setupPush() {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
@@ -41,10 +36,9 @@ export default function PushNotificationManager() {
               applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
             })
 
-            // Get logged-in user email
-            const match = document.cookie.match(new RegExp('(^| )hoistec_session=([^;]+)'))
-            if (match) {
-              const email = decodeURIComponent(match[2])
+            const { data: { session } } = await supabase.auth.getSession()
+            const email = session?.user?.email
+            if (email) {
               await supabase.from('push_subscriptions').upsert([
                 { email, subscription: JSON.stringify(subscription) }
               ], { onConflict: 'email' })

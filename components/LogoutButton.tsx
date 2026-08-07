@@ -2,13 +2,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function LogoutButton() {
   const router = useRouter()
 
-  const handleLogout = () => {
-    // Clear the custom project session cookie
-    document.cookie = 'hoistec_session=; path=/; max-age=0;'
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     router.refresh()
     router.push('/login')
   }

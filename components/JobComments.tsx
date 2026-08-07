@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 
 interface Comment {
   id: number
@@ -18,11 +18,6 @@ export default function JobComments({ jobId }: { jobId: number }) {
   const [newComment, setNewComment] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   const fetchComments = async () => {
     const { data } = await supabase
@@ -42,8 +37,8 @@ export default function JobComments({ jobId }: { jobId: number }) {
     if (!newComment.trim() && !file) return
     setLoading(true)
 
-    const match = document.cookie.match(new RegExp('(^| )hoistec_session=([^;]+)'))
-    const userEmail = match ? decodeURIComponent(match[2]) : 'Unknown'
+    const { data: { session } } = await supabase.auth.getSession()
+    const userEmail = session?.user?.email || 'Unknown'
 
     // Fetch user's real name
     const { data: userData } = await supabase.from('users').select('name').eq('email', userEmail).single()

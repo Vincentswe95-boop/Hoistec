@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getUserRole } from '@/lib/supabase';
 import { 
   Building2, 
   MapPin, 
@@ -70,17 +70,9 @@ export default function DashboardPage() {
 
     const fetchUserRole = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.email) return;
-
-        const { data, error } = await supabase
-          .from('users')
-          .select('role')
-          .eq('email', session.user.email)
-          .single();
-
-        if (data?.role) {
-          setCurrentUserRole(data.role as UserRole);
+        const role = await getUserRole();
+        if (role) {
+          setCurrentUserRole(role as UserRole);
         }
       } catch (err) {
         console.error('Error fetching user role:', err);

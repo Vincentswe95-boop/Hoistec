@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, UserPlus, Trash2, Shield, Mail, Phone, X, Building2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, getUserRole } from '@/lib/supabase';
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -35,14 +35,9 @@ export default function UserManagementPage() {
           return;
         }
 
-        // Check user role
-        const { data: userRecord, error: userError } = await supabase
-          .from('users')
-          .select('role')
-          .eq('email', session.user.email)
-          .single();
+        const role = await getUserRole();
 
-        if (userError || userRecord?.role === 'customer') {
+        if (role === 'customer' || role === null) {
           router.push('/');
           return;
         }

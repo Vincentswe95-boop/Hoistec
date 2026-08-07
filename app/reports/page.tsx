@@ -7,7 +7,7 @@ import { FileText, Download, Calendar } from 'lucide-react';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
 import { useRepairs } from '@/context/RepairsContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getUserRole } from '@/lib/supabase';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -39,14 +39,9 @@ export default function ReportsPage() {
           return;
         }
 
-        // Check user role in database
-        const { data: userRecord, error: userError } = await supabase
-          .from('users')
-          .select('role')
-          .eq('email', session.user.email)
-          .single();
+        const role = await getUserRole();
 
-        if (userError || userRecord?.role === 'customer') {
+        if (role === 'customer' || role === null) {
           router.push('/');
           return;
         }

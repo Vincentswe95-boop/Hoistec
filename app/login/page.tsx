@@ -2,8 +2,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
+import { supabase, getUserRole, syncUserWithAuthTable } from '@/lib/supabase'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,42 +12,53 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    // Query the users table and capture any database errors
-    const { data, error: dbError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single()
+    let authData
+    let authError
 
-    if (dbError) {
-      // Display the REAL error message from Supabase on the screen
-      setError(`Database Error: ${dbError.message} (Hint: ${dbError.hint || 'None'})`)
-      setLoading(false)
-    } else if (!data) {
-      setError("No user found matching that email and password.")
-      setLoading(false)
-    } else {
-      document.cookie = `hoistec_session=${data.email}; path=/; max-age=86400; SameSite=Lax`
-      
-      // Role-based routing: redirect customers to their portal, admins/techs to main dashboard
-      if (data.role === 'customer') {
-        router.push('/customer')
-      } else {
-        router.push('/')
+    ;({ data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    }))
+
+    if (authError || !authData?.user) {
+      try {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+
+        if (signUpError || !signUpData.user) {
+          setError(signUpError?.message || authError?.message || 'Invalid email or password.')
+          setLoading(false)
+          return
+        }
+
+        authData = signUpData
+      } catch (signUpException: any) {
+        setError(signUpException?.message || 'Unable to sign in with Supabase Auth.')
+        setLoading(false)
+        return
       }
-      router.refresh()
     }
+
+    const role = await getUserRole()
+    const emailToSync = authData?.user?.email ?? email
+
+    if (emailToSync) {
+      await syncUserWithAuthTable(emailToSync, role ?? undefined)
+    }
+
+    if (role === 'customer') {
+      router.push('/customer')
+    } else {
+      router.push('/')
+    }
+    router.refresh()
   }
 
   return (

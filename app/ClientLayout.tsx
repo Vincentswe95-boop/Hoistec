@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, LogOut, Menu, X } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase, getUserRole } from '@/lib/supabase';
 
 // 1. Import ALL your providers
 import { CustomersProvider } from '../context/CustomersContext';
@@ -19,24 +19,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [userRole, setUserRole] = useState<string>('admin');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.email) {
-          const { data } = await supabase
-            .from('users')
-            .select('role')
-            .eq('email', session.user.email)
-            .single();
-          if (data?.role) {
-            setUserRole(data.role);
-          }
+        const role = await getUserRole();
+        if (role) {
+          setUserRole(role);
         }
       } catch (err) {
         console.error('Error fetching user role:', err);
@@ -44,7 +32,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     };
 
     fetchUserRole();
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     setIsSidebarOpen(false);
