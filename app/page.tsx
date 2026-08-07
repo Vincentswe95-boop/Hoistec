@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
+import { createClient } from '@/utils/supabase/client';
 import { 
   Building2, 
   MapPin, 
@@ -18,8 +19,7 @@ import {
   ArrowRight,
   Plus,
   Bell,
-  BellOff,
-  ShieldAlert
+  BellOff
 } from 'lucide-react';
 
 type UserRole = 'admin' | 'customer' | 'technician';
@@ -52,6 +52,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { hoists } = useHoists();
   const { customers } = useCustomers();
+  const supabase = createClient();
 
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
   const [windAlerts, setWindAlerts] = useState<HoistWindStatus[]>([]);
@@ -60,14 +61,35 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   
   // Role and notification states
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('admin');
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('customer');
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
-  }, []);
+
+    const fetchUserRole = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.email) return;
+
+        const { data, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('email', session.user.email)
+          .single();
+
+        if (data?.role) {
+          setCurrentUserRole(data.role as UserRole);
+        }
+      } catch (err) {
+        console.error('Error fetching user role:', err);
+      }
+    };
+
+    fetchUserRole();
+  }, [supabase]);
 
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
@@ -178,7 +200,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* Top Header & Role Switcher Bar */}
+      {/* Top Header Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Dashboard Overview</h1>
@@ -186,24 +208,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Role Simulation Switcher */}
-          <div className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
-            <span className="text-[10px] font-bold text-gray-400 uppercase px-2">Role:</span>
-            {(['admin', 'customer', 'technician'] as const).map((role) => (
-              <button
-                key={role}
-                onClick={() => setCurrentUserRole(role)}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg capitalize transition-colors ${
-                  currentUserRole === role 
-                    ? 'bg-[#FE5000] text-white shadow-sm' 
-                    : 'text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {role}
-              </button>
-            ))}
-          </div>
-
           {/* Notification Permission Toggle - Hidden for Technicians */}
           {currentUserRole !== 'technician' && (
             notificationPermission !== 'granted' ? (
