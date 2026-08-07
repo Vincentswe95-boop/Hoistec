@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { 
   Building2, 
   ArrowLeft, 
@@ -20,12 +20,6 @@ import {
   Save,
   CheckCircle2
 } from 'lucide-react';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
-);
 
 type UserRole = 'admin' | 'customer' | 'technician';
 type FileCategory = 'Manual' | 'Picture' | 'Inspection Document' | 'Spare Parts Sheet' | 'Calculation report' | 'RAMS';

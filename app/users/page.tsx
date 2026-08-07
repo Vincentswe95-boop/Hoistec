@@ -3,13 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { Users, UserPlus, Trash2, Shield, Mail, Phone, X, Building2 } from 'lucide-react';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
-);
+import { supabase } from '@/lib/supabase';
 
 export default function UserManagementPage() {
   const router = useRouter();

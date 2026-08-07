@@ -2,14 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Edit, Calendar, Clock, Wrench, User, FileText, Download, MessageSquare } from 'lucide-react';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-anon-key'
-);
+import { supabase } from '@/lib/supabase';
 
 export default function RepairDetailPage() {
   const router = useRouter();

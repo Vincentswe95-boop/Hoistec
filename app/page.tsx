@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
-import { createClient } from '@/utils/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { 
   Building2, 
   MapPin, 
@@ -52,7 +52,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const { hoists } = useHoists();
   const { customers } = useCustomers();
-  const supabase = createClient();
 
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
   const [windAlerts, setWindAlerts] = useState<HoistWindStatus[]>([]);
