@@ -279,54 +279,68 @@ export default function DashboardPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                <th className="py-3 px-4">Hoist / Model</th>
-                <th className="py-3 px-4">Customer / Site</th>
-                <th className="py-3 px-4">Wind Safety Limit</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Action</th>
+                <th className="py-3 px-4">INDIVIDUAL NO.</th>
+                <th className="py-3 px-4">MODEL</th>
+                <th className="py-3 px-4">CURRENT SITE</th>
+                <th className="py-3 px-4">CUSTOMER</th>
+                <th className="py-3 px-4">WIND SAFETY LIMIT</th>
+                <th className="py-3 px-4">STATUS</th>
+                <th className="py-3 px-4 text-right">ACTION</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-xs font-medium text-gray-700">
               {hoists.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-400 font-medium">
+                  <td colSpan={7} className="py-8 text-center text-gray-400 font-medium">
                     No hoists registered in database yet.
                   </td>
                 </tr>
               ) : (
-                hoists.slice(0, 6).map((hoist: any) => {
-                  // Resolve bound customer
+                hoists.map((hoist: any) => {
+                  // Property extractions
+                  const individualNo = hoist.individual_number || hoist.individual_no || hoist.individual_id || '-';
+                  const modelName = hoist.model || hoist.name || '-';
+
+                  // Customer matching
                   const boundCustomer = customers.find(
                     (c: any) => c.id === hoist.customer_id || c.name === hoist.customer_name
                   );
-                  const siteDisplay = boundCustomer?.name || hoist.customer_name || hoist.site_location || hoist.location || 'Unassigned Site';
-                  
-                  // Status checks
-                  const isOperational = hoist.status?.toLowerCase() === 'operational' || hoist.status?.toLowerCase() === 'active';
-                  const isMaintenance = hoist.status?.toLowerCase().includes('maintenance') || hoist.status?.toLowerCase().includes('repair');
+                  const customerDisplay = boundCustomer?.name || hoist.customer || hoist.customer_name || 'Unassigned Customer';
+                  const siteDisplay = hoist.current_site || hoist.site || hoist.site_location || 'Unassigned Site';
+
+                  // Status badge logic
+                  const statusLower = (hoist.status || '').toLowerCase();
+                  const isOnSite = statusLower === 'on site' || statusLower === 'operational' || statusLower === 'active';
+                  const isOffSite = statusLower === 'off site';
 
                   return (
-                    <tr key={hoist.id || hoist.serial_number} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-gray-900">
-                        {hoist.name || hoist.model || `Hoist #${hoist.id}`}
-                        {hoist.serial_number ? <span className="text-gray-400 font-normal ml-1">({hoist.serial_number})</span> : null}
+                    <tr key={hoist.id || hoist.serial_number || individualNo} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-gray-900">{individualNo}</td>
+                      <td className="py-3.5 px-4 font-bold text-gray-800">{modelName}</td>
+                      <td className="py-3.5 px-4 text-gray-600">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                          {siteDisplay}
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 text-gray-600">{siteDisplay}</td>
+                      <td className="py-3.5 px-4 text-gray-600">{customerDisplay}</td>
                       <td className="py-3.5 px-4">
                         <span className="text-emerald-700 font-semibold">
                           {hoist.max_wind_speed || hoist.wind_limit || 14} m/s Max
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                          isOperational 
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                          isOnSite 
                             ? 'bg-emerald-50 text-emerald-700' 
-                            : isMaintenance 
+                            : isOffSite 
                             ? 'bg-amber-50 text-amber-700' 
                             : 'bg-red-50 text-red-700'
                         }`}>
-                          {isOperational ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                          {hoist.status || 'Operational'}
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            isOnSite ? 'bg-emerald-500' : isOffSite ? 'bg-amber-500' : 'bg-red-500'
+                          }`} />
+                          {hoist.status || 'On Site'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
