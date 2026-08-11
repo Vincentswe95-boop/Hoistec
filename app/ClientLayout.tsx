@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, LogOut, Menu, X } from 'lucide-react';
-import { supabase, getUserRole } from '@/lib/supabase';
 
 // 1. Import ALL your providers
 import { CustomersProvider } from '../context/CustomersContext';
@@ -20,23 +19,34 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      try {
-        const role = await getUserRole();
-        if (role) {
-          setUserRole(role);
-        }
-      } catch (err) {
-        console.error('Error fetching user role:', err);
-      }
-    };
+    if (isLoginPage) return;
 
-    fetchUserRole();
-  }, []);
+    // Read session and role directly from localStorage
+    const userStr = localStorage.getItem('renta_user');
+    if (!userStr) {
+      window.location.replace('/login');
+      return;
+    }
+
+    try {
+      const userRecord = JSON.parse(userStr);
+      if (userRecord?.role) {
+        setUserRole(userRecord.role);
+      }
+    } catch (err) {
+      console.error('Failed to parse user session from localStorage:', err);
+      window.location.replace('/login');
+    }
+  }, [isLoginPage]);
 
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('renta_user');
+    window.location.href = '/login';
+  };
 
   if (isLoginPage) {
     return (
@@ -161,9 +171,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <Link href="/profile" className="hidden lg:inline text-xs font-semibold text-gray-700 hover:text-[#FE5000] transition-colors">
                         EDIT PROFILE
                       </Link>
-                      <Link href="/login" className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors shadow-sm">
+                      <button
+                        onClick={handleSignOut}
+                        className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors shadow-sm cursor-pointer"
+                      >
                         <LogOut className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Sign Out</span>
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </header>
