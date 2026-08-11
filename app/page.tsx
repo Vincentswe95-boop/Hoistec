@@ -24,7 +24,7 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
-  const { hoists = [], loading: hoistsLoading } = useHoists();
+  const { hoists = [] } = useHoists();
   const { repairs = [] } = useRepairs();
   const { customers = [] } = useCustomers();
 
@@ -287,13 +287,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-xs font-medium text-gray-700">
-              {hoistsLoading ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-400 font-semibold animate-pulse">
-                    Loading hoists from database...
-                  </td>
-                </tr>
-              ) : hoists.length === 0 ? (
+              {hoists.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-gray-400 font-medium">
                     No hoists registered in database yet.
