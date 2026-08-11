@@ -19,6 +19,70 @@ import {
   RefreshCw 
 } from 'lucide-react';
 
+// Data extraction helpers that catch snake_case, camelCase, and relational joins
+const getIndividualNo = (hoist: any): string => {
+  if (!hoist) return '-';
+  return (
+    hoist.individual_number ||
+    hoist.individualNumber ||
+    hoist.individual_no ||
+    hoist.individualNo ||
+    hoist.individual_id ||
+    hoist.individual ||
+    hoist.ind_no ||
+    '-'
+  );
+};
+
+const getSiteName = (hoist: any): string => {
+  if (!hoist) return 'Unassigned Site';
+  if (typeof hoist.current_site === 'string' && hoist.current_site) return hoist.current_site;
+  if (typeof hoist.currentSite === 'string' && hoist.currentSite) return hoist.currentSite;
+  if (typeof hoist.site === 'string' && hoist.site) return hoist.site;
+  if (hoist.site?.name) return hoist.site.name;
+  if (hoist.sites?.name) return hoist.sites.name;
+  if (hoist.current_site?.name) return hoist.current_site.name;
+  if (hoist.site_name) return hoist.site_name;
+  if (hoist.siteName) return hoist.siteName;
+  if (hoist.location) return hoist.location;
+  return 'Unassigned Site';
+};
+
+const getCustomerName = (hoist: any, customersList: any[] = []): string => {
+  if (!hoist) return 'Unassigned Customer';
+
+  // 1. Check joined table objects (e.g. Supabase joins like select('*, customers(name)'))
+  if (hoist.customers?.name) return hoist.customers.name;
+  if (hoist.customer?.name) return hoist.customer.name;
+  if (typeof hoist.customer === 'string' && hoist.customer) return hoist.customer;
+  if (hoist.customer_name) return hoist.customer_name;
+  if (hoist.customerName) return hoist.customerName;
+
+  // 2. Relational lookup by ID in customers array
+  const targetId = hoist.customer_id ?? hoist.customerId;
+  if (targetId !== undefined && targetId !== null && Array.isArray(customersList)) {
+    const found = customersList.find(
+      (c: any) => String(c.id) === String(targetId) || String(c.customer_id) === String(targetId)
+    );
+    if (found) {
+      return found.name || found.customer_name || found.company_name || 'Unassigned Customer';
+    }
+  }
+
+  return 'Unassigned Customer';
+};
+
+const getWindSpeedLimit = (hoist: any): number => {
+  return (
+    hoist.wind_speed_limit ??
+    hoist.windSpeedLimit ??
+    hoist.max_wind_speed ??
+    hoist.wind_limit ??
+    hoist.windLimit ??
+    14
+  );
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
@@ -26,7 +90,7 @@ export default function DashboardPage() {
   const { repairs = [] } = useRepairs();
   const { customers = [] } = useCustomers();
 
-  // Wind Monitoring State (Live telemetry for Boden)
+  // Wind Monitoring State
   const [windData, setWindData] = useState<{
     speed: number;
     gusts: number;
@@ -42,7 +106,7 @@ export default function DashboardPage() {
   const [loadingWind, setLoadingWind] = useState(false);
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
 
-  // Fetch live wind data
+  // Fetch live wind telemetry
   const fetchLiveWindData = async () => {
     setLoadingWind(true);
     try {
@@ -295,25 +359,18 @@ export default function DashboardPage() {
                 </tr>
               ) : (
                 hoists.map((hoist: any) => {
-                  // Direct mappings matching public.hoists schema columns
-                  const individualNo = hoist.individual_number || '-';
-                  const modelName = hoist.model || '-';
-                  const siteDisplay = hoist.current_site || 'Unassigned Site';
-                  const windLimit = hoist.wind_speed_limit ?? 14;
+                  const individualNo = getIndividualNo(hoist);
+                  const modelName = hoist.model || hoist.name || '-';
+                  const siteDisplay = getSiteName(hoist);
+                  const customerDisplay = getCustomerName(hoist, customers);
+                  const windLimit = getWindSpeedLimit(hoist);
 
-                  // Relational lookup using customer_id FK
-                  const boundCustomer = customers.find(
-                    (c: any) => String(c.id) === String(hoist.customer_id)
-                  );
-                  const customerDisplay = boundCustomer?.name || 'Unassigned Customer';
-
-                  // Status badge logic
                   const statusLower = (hoist.status || '').toLowerCase();
                   const isOnSite = statusLower === 'on site' || statusLower === 'operational' || statusLower === 'active';
                   const isOffSite = statusLower === 'off site';
 
                   return (
-                    <tr key={hoist.id || hoist.serial_number} className="hover:bg-gray-50/80 transition-colors">
+                    <tr key={hoist.id || hoist.serial_number || individualNo} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-bold text-gray-900">{individualNo}</td>
                       <td className="py-3.5 px-4 font-bold text-gray-800">{modelName}</td>
                       <td className="py-3.5 px-4 text-gray-600">
