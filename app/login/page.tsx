@@ -2,11 +2,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,15 +17,12 @@ export default function LoginPage() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      console.log('Logging in with:', cleanEmail);
 
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', cleanEmail)
         .eq('password', password);
-
-      console.log('Database result:', { data, error });
 
       if (error) {
         setErrorMsg(`Database error: ${error.message}`);
@@ -42,11 +37,12 @@ export default function LoginPage() {
       }
 
       const userRecord = data[0];
+      
+      // Save session to localStorage
       localStorage.setItem('renta_user', JSON.stringify(userRecord));
       
-      setLoading(false);
-      router.push('/');
-      router.refresh();
+      // Force a full browser navigation to ensure localStorage is committed
+      window.location.href = '/';
     } catch (err: any) {
       console.error('Login error:', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
