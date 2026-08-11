@@ -51,14 +51,12 @@ const getSiteName = (hoist: any): string => {
 const getCustomerName = (hoist: any, customersList: any[] = []): string => {
   if (!hoist) return 'Unassigned Customer';
 
-  // 1. Check joined table objects (e.g. Supabase joins like select('*, customers(name)'))
   if (hoist.customers?.name) return hoist.customers.name;
   if (hoist.customer?.name) return hoist.customer.name;
   if (typeof hoist.customer === 'string' && hoist.customer) return hoist.customer;
   if (hoist.customer_name) return hoist.customer_name;
   if (hoist.customerName) return hoist.customerName;
 
-  // 2. Relational lookup by ID in customers array
   const targetId = hoist.customer_id ?? hoist.customerId;
   if (targetId !== undefined && targetId !== null && Array.isArray(customersList)) {
     const found = customersList.find(
@@ -369,6 +367,9 @@ export default function DashboardPage() {
                   const isOnSite = statusLower === 'on site' || statusLower === 'operational' || statusLower === 'active';
                   const isOffSite = statusLower === 'off site';
 
+                  // Dynamic link target (prefers ID, falls back to serial_number)
+                  const targetId = hoist.id || hoist.serial_number;
+
                   return (
                     <tr key={hoist.id || hoist.serial_number || individualNo} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-bold text-gray-900">{individualNo}</td>
@@ -401,7 +402,7 @@ export default function DashboardPage() {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button 
-                          onClick={() => router.push('/hoists')} 
+                          onClick={() => router.push(`/hoists/${targetId}`)} 
                           className="text-xs font-bold text-gray-500 hover:text-[#FE5000] cursor-pointer"
                         >
                           Manage
