@@ -24,7 +24,7 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
-  const { hoists = [] } = useHoists();
+  const { hoists = [], loading: hoistsLoading } = useHoists();
   const { repairs = [] } = useRepairs();
   const { customers = [] } = useCustomers();
 
@@ -44,7 +44,7 @@ export default function DashboardPage() {
   const [loadingWind, setLoadingWind] = useState(false);
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
 
-  // Fetch live wind data (Default location: Boden/Northern Sweden site coordinates)
+  // Fetch live wind data (Coordinates: Boden site)
   const fetchLiveWindData = async () => {
     setLoadingWind(true);
     try {
@@ -87,10 +87,11 @@ export default function DashboardPage() {
     );
   }
 
-  // Derived statistics
-  const activeHoistsCount = hoists.filter((h: any) => h.status !== 'Decommissioned').length || hoists.length || 12;
-  const pendingRepairsCount = repairs.filter((r: any) => r.status !== 'Completed').length || repairs.length || 3;
-  const activeCustomersCount = customers.length || 5;
+  // Derived statistics from database
+  const activeHoists = hoists.filter((h: any) => h.status !== 'Decommissioned');
+  const activeHoistsCount = activeHoists.length;
+  const pendingRepairsCount = repairs.filter((r: any) => r.status !== 'Completed').length;
+  const activeCustomersCount = customers.length;
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -161,7 +162,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs opacity-90 mt-0.5 font-medium">
-                Real-time site weather thresholds monitoring mast hoist safety. Maximum operational threshold: 14.0 m/s.
+                Real-time weather threshold monitoring for mast hoists. Operational cutoff threshold: 14.0 m/s.
               </p>
             </div>
           </div>
@@ -259,12 +260,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick Fleet & Activity Overview Section */}
+      {/* Database-Synced Fleet Overview Table */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-gray-900">Active Hoist Fleet Status</h2>
-            <p className="text-xs text-gray-500 font-medium">Real-time status overview across active job sites.</p>
+            <p className="text-xs text-gray-500 font-medium">Real-time status synced directly from your database.</p>
           </div>
           <button 
             onClick={() => router.push('/hoists')}
@@ -278,7 +279,7 @@ export default function DashboardPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                <th className="py-3 px-4">Hoist / Serial</th>
+                <th className="py-3 px-4">Hoist / Model</th>
                 <th className="py-3 px-4">Customer / Site</th>
                 <th className="py-3 px-4">Wind Safety Limit</th>
                 <th className="py-3 px-4">Status</th>
@@ -286,47 +287,66 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-xs font-medium text-gray-700">
-              <tr className="hover:bg-gray-50/80 transition-colors">
-                <td className="py-3.5 px-4 font-bold text-gray-900">Alimak Scando 650 (#HST-101)</td>
-                <td className="py-3.5 px-4 text-gray-600">NCC Construction (Boden Site A)</td>
-                <td className="py-3.5 px-4"><span className="text-emerald-700 font-semibold">14 m/s Max</span></td>
-                <td className="py-3.5 px-4">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[11px] font-bold">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Operational
-                  </span>
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <button onClick={() => router.push('/hoists')} className="text-xs font-bold text-gray-500 hover:text-[#FE5000]">Manage</button>
-                </td>
-              </tr>
+              {hoistsLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-400 font-semibold animate-pulse">
+                    Loading hoists from database...
+                  </td>
+                </tr>
+              ) : hoists.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-400 font-medium">
+                    No hoists registered in database yet.
+                  </td>
+                </tr>
+              ) : (
+                hoists.slice(0, 6).map((hoist: any) => {
+                  // Resolve bound customer
+                  const boundCustomer = customers.find(
+                    (c: any) => c.id === hoist.customer_id || c.name === hoist.customer_name
+                  );
+                  const siteDisplay = boundCustomer?.name || hoist.customer_name || hoist.site_location || hoist.location || 'Unassigned Site';
+                  
+                  // Status checks
+                  const isOperational = hoist.status?.toLowerCase() === 'operational' || hoist.status?.toLowerCase() === 'active';
+                  const isMaintenance = hoist.status?.toLowerCase().includes('maintenance') || hoist.status?.toLowerCase().includes('repair');
 
-              <tr className="hover:bg-gray-50/80 transition-colors">
-                <td className="py-3.5 px-4 font-bold text-gray-900">Geda Multilift P18 (#HST-104)</td>
-                <td className="py-3.5 px-4 text-gray-600">Peab AB (Luleå Harbor)</td>
-                <td className="py-3.5 px-4"><span className="text-emerald-700 font-semibold">12 m/s Max</span></td>
-                <td className="py-3.5 px-4">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Maintenance Due
-                  </span>
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <button onClick={() => router.push('/repairs')} className="text-xs font-bold text-gray-500 hover:text-[#FE5000]">Schedule</button>
-                </td>
-              </tr>
-
-              <tr className="hover:bg-gray-50/80 transition-colors">
-                <td className="py-3.5 px-4 font-bold text-gray-900">Scanclimber SC2000 (#HST-202)</td>
-                <td className="py-3.5 px-4 text-gray-600">Skanska (Skellefteå Plant)</td>
-                <td className="py-3.5 px-4"><span className="text-emerald-700 font-semibold">15 m/s Max</span></td>
-                <td className="py-3.5 px-4">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[11px] font-bold">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Operational
-                  </span>
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <button onClick={() => router.push('/hoists')} className="text-xs font-bold text-gray-500 hover:text-[#FE5000]">Manage</button>
-                </td>
-              </tr>
+                  return (
+                    <tr key={hoist.id || hoist.serial_number} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-gray-900">
+                        {hoist.name || hoist.model || `Hoist #${hoist.id}`}
+                        {hoist.serial_number ? <span className="text-gray-400 font-normal ml-1">({hoist.serial_number})</span> : null}
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-600">{siteDisplay}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-emerald-700 font-semibold">
+                          {hoist.max_wind_speed || hoist.wind_limit || 14} m/s Max
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                          isOperational 
+                            ? 'bg-emerald-50 text-emerald-700' 
+                            : isMaintenance 
+                            ? 'bg-amber-50 text-amber-700' 
+                            : 'bg-red-50 text-red-700'
+                        }`}>
+                          {isOperational ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                          {hoist.status || 'Operational'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button 
+                          onClick={() => router.push('/hoists')} 
+                          className="text-xs font-bold text-gray-500 hover:text-[#FE5000] cursor-pointer"
+                        >
+                          Manage
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
