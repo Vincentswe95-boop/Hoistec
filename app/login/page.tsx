@@ -9,20 +9,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+    setSuccessMsg('');
 
     try {
       const cleanEmail = email.trim().toLowerCase();
+      console.log('Logging in with:', cleanEmail);
 
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', cleanEmail)
         .eq('password', password);
+
+      console.log('Database result:', { data, error });
 
       if (error) {
         setErrorMsg(`Database error: ${error.message}`);
@@ -37,12 +42,25 @@ export default function LoginPage() {
       }
 
       const userRecord = data[0];
-      
-      // Save session to localStorage
-      localStorage.setItem('renta_user', JSON.stringify(userRecord));
-      
-      // Force a full browser navigation to ensure localStorage is committed
-      window.location.href = '/';
+
+      // Safely write to localStorage with error catching
+      try {
+        localStorage.setItem('renta_user', JSON.stringify(userRecord));
+        console.log('Session saved to localStorage successfully.');
+      } catch (storageErr) {
+        console.error('LocalStorage write failed:', storageErr);
+        setErrorMsg('Browser storage is blocked. Please check your privacy settings or disable strict tracking protection.');
+        setLoading(false);
+        return;
+      }
+
+      setSuccessMsg('Success! Redirecting to dashboard...');
+
+      // Small delay to ensure storage commit before hard redirect
+      setTimeout(() => {
+        window.location.replace('/');
+      }, 150);
+
     } catch (err: any) {
       console.error('Login error:', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
@@ -61,6 +79,12 @@ export default function LoginPage() {
         {errorMsg && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-semibold">
             {errorMsg}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-2xl text-xs font-semibold">
+            {successMsg}
           </div>
         )}
 
