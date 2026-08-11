@@ -14,13 +14,10 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('--- 1. FORM SUBMITTED ---');
     setLoading(true);
     setErrorMsg('');
 
     try {
-      console.log('--- 2. SENDING QUERY TO SUPABASE ---', { email: email.trim().toLowerCase() });
-      
       const { data: userRecord, error } = await supabase
         .from('users')
         .select('*')
@@ -28,23 +25,17 @@ export default function LoginPage() {
         .eq('password', password)
         .single();
 
-      console.log('--- 3. QUERY COMPLETED ---', { userRecord, error });
-
       if (error || !userRecord) {
-        console.warn('--- 4. LOGIN FAILED: Invalid credentials or error ---');
         setErrorMsg('Invalid email or password.');
         setLoading(false);
         return;
       }
 
-      console.log('--- 5. LOGIN SUCCESSFUL: Saving to localStorage ---');
       localStorage.setItem('renta_user', JSON.stringify(userRecord));
-
-      console.log('--- 6. REDIRECTING TO DASHBOARD ---');
+      setLoading(false);
       router.push('/');
       router.refresh();
     } catch (err: any) {
-      console.error('--- 7. CAUGHT EXCEPTION ---', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
       setLoading(false);
     }
