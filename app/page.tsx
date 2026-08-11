@@ -13,8 +13,6 @@ import {
   Clock, 
   Shield, 
   Wind, 
-  AlertTriangle, 
-  CheckCircle2, 
   X, 
   ArrowUpRight, 
   Activity, 
@@ -28,14 +26,14 @@ export default function DashboardPage() {
   const { repairs = [] } = useRepairs();
   const { customers = [] } = useCustomers();
 
-  // Wind Monitoring State (Open-Meteo Live Data for Site Safety)
+  // Wind Monitoring State (Live telemetry for Boden)
   const [windData, setWindData] = useState<{
     speed: number;
     gusts: number;
     direction: number;
     status: 'SAFE' | 'CAUTION' | 'DANGER';
   }>({
-    speed: 8.4,
+    speed: 5.7,
     gusts: 11.2,
     direction: 210,
     status: 'SAFE',
@@ -44,7 +42,7 @@ export default function DashboardPage() {
   const [loadingWind, setLoadingWind] = useState(false);
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
 
-  // Fetch live wind data (Coordinates: Boden site)
+  // Fetch live wind data
   const fetchLiveWindData = async () => {
     setLoadingWind(true);
     try {
@@ -67,7 +65,7 @@ export default function DashboardPage() {
         setWindData({ speed, gusts, direction, status });
       }
     } catch (err) {
-      console.error('Failed to fetch Open-Meteo wind data:', err);
+      console.error('Failed to fetch wind telemetry:', err);
     } finally {
       setLoadingWind(false);
     }
@@ -75,19 +73,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchLiveWindData();
-    const interval = setInterval(fetchLiveWindData, 5 * 60 * 1000); // Auto-refresh every 5 mins
+    const interval = setInterval(fetchLiveWindData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
   if (userLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xs text-gray-400 font-medium">
-        Loading Hoistec Dashboard...
+        Loading Dashboard...
       </div>
     );
   }
 
-  // Derived statistics from database
+  // Dashboard Stats
   const activeHoists = hoists.filter((h: any) => h.status !== 'Decommissioned');
   const activeHoistsCount = activeHoists.length;
   const pendingRepairsCount = repairs.filter((r: any) => r.status !== 'Completed').length;
@@ -133,7 +131,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Wind Safety Live Banner */}
+      {/* Wind Telemetry Banner */}
       <div className={`p-6 rounded-3xl border shadow-xs transition-all ${
         windData.status === 'DANGER'
           ? 'bg-red-50 border-red-200 text-red-900'
@@ -193,7 +191,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Dynamic Summary Cards */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div 
           onClick={() => router.push('/hoists')}
@@ -260,7 +258,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Database-Synced Fleet Overview Table */}
+      {/* Database-Synced Active Fleet Table */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -269,7 +267,7 @@ export default function DashboardPage() {
           </div>
           <button 
             onClick={() => router.push('/hoists')}
-            className="text-xs font-bold text-[#FE5000] hover:text-orange-600 transition-colors"
+            className="text-xs font-bold text-[#FE5000] hover:text-orange-600 transition-colors cursor-pointer"
           >
             View All Hoists →
           </button>
@@ -297,16 +295,17 @@ export default function DashboardPage() {
                 </tr>
               ) : (
                 hoists.map((hoist: any) => {
-                  // Property extractions
-                  const individualNo = hoist.individual_number || hoist.individual_no || hoist.individual_id || '-';
-                  const modelName = hoist.model || hoist.name || '-';
+                  // Direct mappings matching public.hoists schema columns
+                  const individualNo = hoist.individual_number || '-';
+                  const modelName = hoist.model || '-';
+                  const siteDisplay = hoist.current_site || 'Unassigned Site';
+                  const windLimit = hoist.wind_speed_limit ?? 14;
 
-                  // Customer matching
+                  // Relational lookup using customer_id FK
                   const boundCustomer = customers.find(
-                    (c: any) => c.id === hoist.customer_id || c.name === hoist.customer_name
+                    (c: any) => String(c.id) === String(hoist.customer_id)
                   );
-                  const customerDisplay = boundCustomer?.name || hoist.customer || hoist.customer_name || 'Unassigned Customer';
-                  const siteDisplay = hoist.current_site || hoist.site || hoist.site_location || 'Unassigned Site';
+                  const customerDisplay = boundCustomer?.name || 'Unassigned Customer';
 
                   // Status badge logic
                   const statusLower = (hoist.status || '').toLowerCase();
@@ -314,7 +313,7 @@ export default function DashboardPage() {
                   const isOffSite = statusLower === 'off site';
 
                   return (
-                    <tr key={hoist.id || hoist.serial_number || individualNo} className="hover:bg-gray-50/80 transition-colors">
+                    <tr key={hoist.id || hoist.serial_number} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-bold text-gray-900">{individualNo}</td>
                       <td className="py-3.5 px-4 font-bold text-gray-800">{modelName}</td>
                       <td className="py-3.5 px-4 text-gray-600">
@@ -326,7 +325,7 @@ export default function DashboardPage() {
                       <td className="py-3.5 px-4 text-gray-600">{customerDisplay}</td>
                       <td className="py-3.5 px-4">
                         <span className="text-emerald-700 font-semibold">
-                          {hoist.max_wind_speed || hoist.wind_limit || 14} m/s Max
+                          {windLimit} m/s Max
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
