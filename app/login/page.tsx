@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useUser } from '../context/UserContext';
+import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const { setUser } = useUser();
