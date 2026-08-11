@@ -3,8 +3,10 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useUser } from '../context/UserContext';
 
 export default function LoginPage() {
+  const { setUser } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,15 +21,12 @@ export default function LoginPage() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      console.log('Logging in with:', cleanEmail);
 
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', cleanEmail)
         .eq('password', password);
-
-      console.log('Database result:', { data, error });
 
       if (error) {
         setErrorMsg(`Database error: ${error.message}`);
@@ -43,23 +42,25 @@ export default function LoginPage() {
 
       const userRecord = data[0];
 
-      // Safely write to localStorage with error catching
+      // 1. Save to localStorage
       try {
         localStorage.setItem('renta_user', JSON.stringify(userRecord));
-        console.log('Session saved to localStorage successfully.');
       } catch (storageErr) {
         console.error('LocalStorage write failed:', storageErr);
-        setErrorMsg('Browser storage is blocked. Please check your privacy settings or disable strict tracking protection.');
+        setErrorMsg('Browser storage is blocked. Please check your privacy settings.');
         setLoading(false);
         return;
       }
 
+      // 2. Immediately update React Context memory
+      setUser(userRecord);
+
       setSuccessMsg('Success! Redirecting to dashboard...');
 
-      // Small delay to ensure storage commit before hard redirect
+      // 3. Perform clean navigation
       setTimeout(() => {
-        window.location.replace('/');
-      }, 150);
+        window.location.href = '/';
+      }, 300);
 
     } catch (err: any) {
       console.error('Login error:', err);
