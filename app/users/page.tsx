@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { Users, UserPlus, Trash2, Shield, Mail, Phone, X, Building2 } from 'lucide-react';
-import { supabase, getUserRole } from '@/lib/supabase';
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -15,7 +15,6 @@ export default function UserManagementPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // New user form state
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,38 +24,27 @@ export default function UserManagementPage() {
     customer_id: '',
   });
 
-  // Route protection and data fetching
   useEffect(() => {
     const verifyAndLoad = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.email) {
+        const userStr = localStorage.getItem('renta_user');
+        if (!userStr) {
           router.push('/login');
           return;
         }
 
-        const role = await getUserRole();
-
-        if (role === 'customer') {
+        const userRecord = JSON.parse(userStr);
+        if (userRecord?.role === 'customer') {
           router.push('/');
           return;
         }
 
-        if (role === 'admin') {
-          setIsAuthorized(true);
-          fetchUsers();
-          fetchCustomers();
-          return;
-        }
-
-        setErrorMsg('Your role is not assigned yet. Please contact an administrator to grant access to User Management.');
         setIsAuthorized(true);
         fetchUsers();
         fetchCustomers();
       } catch (err) {
         console.error('Authorization check failed:', err);
-        setErrorMsg('Unable to verify your access. Please try again in a moment.');
-        setIsAuthorized(true);
+        router.push('/');
       }
     };
 
@@ -124,13 +112,11 @@ export default function UserManagementPage() {
     }
   };
 
-  // Helper to find customer company name
   const getCustomerName = (customerId: number) => {
     const found = customers.find(c => Number(c.id) === Number(customerId));
     return found ? found.name : `Customer ID #${customerId}`;
   };
 
-  // Prevent flash while verifying authorization
   if (!isAuthorized) {
     return null;
   }
@@ -231,7 +217,6 @@ export default function UserManagementPage() {
         )}
       </div>
 
-      {/* Add User Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6">
