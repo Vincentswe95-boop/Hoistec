@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase'; // <-- Use the shared singleton instance
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,18 +18,24 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Query your public 'users' table directly matching your schema
+      const { data: userRecord, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .eq('password', password)
+        .single();
 
-      if (error) {
-        setErrorMsg(error.message);
-        setLoading(false); // Instantly stop loading on error so you can try again
+      if (error || !userRecord) {
+        setErrorMsg('Invalid email or password.');
+        setLoading(false);
         return;
       }
 
-      // Successful login -> route to dashboard and refresh state
+      // Store user session in localStorage so the app recognizes them across pages
+      localStorage.setItem('renta_user', JSON.stringify(userRecord));
+
+      // Also create a dummy Supabase auth session fallback if needed, or route directly
       router.push('/');
       router.refresh();
     } catch (err: any) {
