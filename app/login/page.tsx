@@ -2,10 +2,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
+  const router = useRouter();
   const { setUser } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +23,7 @@ export default function LoginPage() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
+      console.log('Attempting login for:', cleanEmail);
 
       const { data, error } = await supabase
         .from('users')
@@ -29,41 +32,46 @@ export default function LoginPage() {
         .eq('password', password);
 
       if (error) {
+        console.error('Supabase query error:', error);
         setErrorMsg(`Database error: ${error.message}`);
         setLoading(false);
         return;
       }
 
       if (!data || data.length === 0) {
+        console.warn('No matching user found in database.');
         setErrorMsg('Invalid email or password.');
         setLoading(false);
         return;
       }
 
       const userRecord = data[0];
+      console.log('User authenticated successfully:', userRecord);
 
       // 1. Save to localStorage
       try {
         localStorage.setItem('renta_user', JSON.stringify(userRecord));
+        console.log('Saved user session to localStorage');
       } catch (storageErr) {
         console.error('LocalStorage write failed:', storageErr);
-        setErrorMsg('Browser storage is blocked. Please check your privacy settings.');
+        setErrorMsg('Browser storage is blocked. Please check your browser privacy settings.');
         setLoading(false);
         return;
       }
 
-      // 2. Immediately update React Context memory
+      // 2. Update React Context memory
       setUser(userRecord);
 
-      setSuccessMsg('Success! Redirecting to dashboard...');
+      setSuccessMsg('Login successful! Navigating to dashboard...');
 
-      // 3. Perform clean navigation
+      // 3. Navigate cleanly using Next Router
       setTimeout(() => {
-        window.location.href = '/';
-      }, 300);
+        router.push('/');
+        router.refresh();
+      }, 500);
 
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error('Unexpected login error:', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
       setLoading(false);
     }
