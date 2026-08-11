@@ -14,11 +14,13 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('--- 1. FORM SUBMITTED ---');
     setLoading(true);
     setErrorMsg('');
 
     try {
-      // Query your public 'users' table directly matching your schema
+      console.log('--- 2. SENDING QUERY TO SUPABASE ---', { email: email.trim().toLowerCase() });
+      
       const { data: userRecord, error } = await supabase
         .from('users')
         .select('*')
@@ -26,19 +28,23 @@ export default function LoginPage() {
         .eq('password', password)
         .single();
 
+      console.log('--- 3. QUERY COMPLETED ---', { userRecord, error });
+
       if (error || !userRecord) {
+        console.warn('--- 4. LOGIN FAILED: Invalid credentials or error ---');
         setErrorMsg('Invalid email or password.');
         setLoading(false);
         return;
       }
 
-      // Store user session in localStorage so the app recognizes them across pages
+      console.log('--- 5. LOGIN SUCCESSFUL: Saving to localStorage ---');
       localStorage.setItem('renta_user', JSON.stringify(userRecord));
 
-      // Also create a dummy Supabase auth session fallback if needed, or route directly
+      console.log('--- 6. REDIRECTING TO DASHBOARD ---');
       router.push('/');
       router.refresh();
     } catch (err: any) {
+      console.error('--- 7. CAUGHT EXCEPTION ---', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
       setLoading(false);
     }
