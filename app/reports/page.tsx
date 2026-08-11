@@ -3,11 +3,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Download, Calendar } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { useHoists } from '@/context/HoistsContext';
 import { useCustomers } from '@/context/CustomersContext';
 import { useRepairs } from '@/context/RepairsContext';
-import { supabase, getUserRole } from '@/lib/supabase';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -29,19 +28,17 @@ export default function ReportsPage() {
   const [hourlyRate, setHourlyRate] = useState(750);
   const [generatedReport, setGeneratedReport] = useState<any>(null);
 
-  // Route protection and authorization check
   useEffect(() => {
     const verifyAndLoad = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.email) {
+        const userStr = localStorage.getItem('renta_user');
+        if (!userStr) {
           router.push('/login');
           return;
         }
 
-        const role = await getUserRole();
-
-        if (role === 'customer' || role === null) {
+        const userRecord = JSON.parse(userStr);
+        if (userRecord?.role === 'customer') {
           router.push('/');
           return;
         }
@@ -96,7 +93,6 @@ export default function ReportsPage() {
     });
   };
 
-  // Prevent flash while verifying authorization
   if (!isAuthorized) {
     return null;
   }
