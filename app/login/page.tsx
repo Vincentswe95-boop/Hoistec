@@ -18,24 +18,37 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      const { data: userRecord, error } = await supabase
+      const cleanEmail = email.trim().toLowerCase();
+      console.log('Logging in with:', cleanEmail);
+
+      const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email.trim().toLowerCase())
-        .eq('password', password)
-        .single();
+        .eq('email', cleanEmail)
+        .eq('password', password);
 
-      if (error || !userRecord) {
+      console.log('Database result:', { data, error });
+
+      if (error) {
+        setErrorMsg(`Database error: ${error.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!data || data.length === 0) {
         setErrorMsg('Invalid email or password.');
         setLoading(false);
         return;
       }
 
+      const userRecord = data[0];
       localStorage.setItem('renta_user', JSON.stringify(userRecord));
+      
       setLoading(false);
       router.push('/');
       router.refresh();
     } catch (err: any) {
+      console.error('Login error:', err);
       setErrorMsg(err.message || 'An unexpected error occurred.');
       setLoading(false);
     }
